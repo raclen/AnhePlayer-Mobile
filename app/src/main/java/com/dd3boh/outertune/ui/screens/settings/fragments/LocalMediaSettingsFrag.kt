@@ -18,7 +18,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -43,7 +42,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,6 +84,7 @@ import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.dialog.ActionPromptDialog
+import com.dd3boh.outertune.ui.dialog.HiddenScanFoldersDialog
 import com.dd3boh.outertune.ui.dialog.InfoLabel
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.ui.utils.clearDtCache
@@ -98,6 +97,7 @@ import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerPr
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerProgressTotal
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerRequestCancel
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerState
+import com.dd3boh.outertune.utils.scanners.MusicFolderDiscovery
 import com.dd3boh.outertune.utils.scanners.ScannerAbortException
 import com.dd3boh.outertune.utils.scanners.absoluteFilePathFromUri
 import com.dd3boh.outertune.utils.scanners.stringFromUriList
@@ -125,12 +125,17 @@ fun ColumnScope.LocalScannerFrag() {
     var mediaPermission by remember { mutableStateOf(true) }
 
     /**
-     * True = include folders
-     * False = exclude folders
-     * Null = don't show dialog
+     * 是否显示「扫描路径」对话框
      */
-    var showAddFolderDialog: Boolean? by remember {
-        mutableStateOf(null)
+    var showScanPathDialog by remember {
+        mutableStateOf(false)
+    }
+
+    /**
+     * 是否显示「隐藏文件夹」对话框
+     */
+    var showHiddenFoldersDialog by remember {
+        mutableStateOf(false)
     }
 
     // scanner prefs
@@ -146,7 +151,8 @@ fun ColumnScope.LocalScannerFrag() {
     val strictFilePaths by rememberPreference(ScannerStrictFilePathsKey, defaultValue = false)
     val downloadPath by rememberPreference(DownloadPathKey, "")
     val (scanPaths, onScanPathsChange) = rememberPreference(ScanPathsKey, defaultValue = "")
-    val (excludedScanPaths, onExcludedScanPathsChange) = rememberPreference(ExcludedScanPathsKey, defaultValue = "")
+    // 隐藏文件夹以「排除路径」的形式参与扫描，这里的值由隐藏文件夹对话框维护
+    val (excludedScanPaths, _) = rememberPreference(ExcludedScanPathsKey, defaultValue = "")
     val dlPathExtra by rememberPreference(DownloadExtraPathKey, "")
 
     var fullRescan by remember { mutableStateOf(false) }
@@ -155,8 +161,10 @@ fun ColumnScope.LocalScannerFrag() {
 
     LaunchedEffect(scanPaths) {
         if (scanPaths.isBlank()) {
-            showAddFolderDialog = true
+            showScanPathDialog = true
         }
+        // 扫描路径变更后，之前扫出来的文件夹列表作废
+        MusicFolderDiscovery.invalidate()
     }
 
     // scanner
@@ -373,15 +381,23 @@ fun ColumnScope.LocalScannerFrag() {
         title = { Text(stringResource(R.string.scan_paths_incl)) },
         description = stringResource(R.string.scan_paths_incl_description),
         onClick = {
-            showAddFolderDialog = true
+            showScanPathDialog = true
         },
     )
 
+    // 隐藏文件夹（原「排除的扫描路径」）
+    val hiddenFolderCount = remember(excludedScanPaths) {
+        uriListFromString(excludedScanPaths).size
+    }
     PreferenceEntry(
-        title = { Text(stringResource(R.string.scan_paths_excl)) },
-        description = stringResource(R.string.scan_paths_excl_description),
+        title = { Text(stringResource(R.string.scan_paths_hidden)) },
+        description = if (hiddenFolderCount > 0) {
+            stringResource(R.string.scan_paths_hidden_count, hiddenFolderCount)
+        } else {
+            stringResource(R.string.scan_paths_hidden_description)
+        },
         onClick = {
-            showAddFolderDialog = false
+            showHiddenFoldersDialog = true
         },
     )
 
@@ -411,54 +427,29 @@ fun ColumnScope.LocalScannerFrag() {
      */
 
 
-    if (showAddFolderDialog != null) {
+    if (showHiddenFoldersDialog) {
+        HiddenScanFoldersDialog(
+            onDismiss = { showHiddenFoldersDialog = false }
+        )
+    }
+
+    if (showScanPathDialog) {
         var tempScanPaths = remember { mutableStateListOf<Uri>() }
-        LaunchedEffect(showAddFolderDialog, scanPaths, excludedScanPaths) {
+        LaunchedEffect(scanPaths) {
             tempScanPaths.clear()
-            tempScanPaths.addAll(
-                uriListFromString(if (showAddFolderDialog == true) scanPaths else excludedScanPaths)
-            )
+            tempScanPaths.addAll(uriListFromString(scanPaths))
         }
 
         ActionPromptDialog(
-            titleBar = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (showAddFolderDialog as Boolean) R.string.scan_paths_incl
-                            else R.string.scan_paths_excl
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-
-                    // switch between include and exclude
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Switch(
-                            checked = showAddFolderDialog!!,
-                            onCheckedChange = {
-                                showAddFolderDialog = !showAddFolderDialog!!
-                            },
-                        )
-                    }
-                }
-            },
+            title = stringResource(R.string.scan_paths_incl),
             onDismiss = {
-                showAddFolderDialog = null
+                showScanPathDialog = false
                 tempScanPaths.clear()
             },
             onConfirm = {
-                if (showAddFolderDialog as Boolean) {
-                    onScanPathsChange(stringFromUriList(tempScanPaths.toList()))
-                } else {
-                    onExcludedScanPathsChange(stringFromUriList(tempScanPaths.toList()))
-                }
+                onScanPathsChange(stringFromUriList(tempScanPaths.toList()))
 
-                showAddFolderDialog = null
+                showScanPathDialog = false
                 tempScanPaths.clear()
             },
             onReset = {
@@ -466,7 +457,7 @@ fun ColumnScope.LocalScannerFrag() {
                 tempScanPaths.clear()
             },
             onCancel = {
-                showAddFolderDialog = null
+                showScanPathDialog = false
                 tempScanPaths.clear()
             },
             isInputValid = tempScanPaths.toList().all {

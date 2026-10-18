@@ -129,6 +129,7 @@ val ScannerStrictExtKey = booleanPreferencesKey("scannerStrictExt")
 
 val ScanPathsKey = stringPreferencesKey("inclScanPaths") // previously "scanPaths"
 val ExcludedScanPathsKey = stringPreferencesKey("exclScanPaths") // previously "excludedScanPaths"
+// 隐藏的扫描文件夹（换行分隔的 SAF 目录 URI），由「隐藏文件夹」界面维护，扫描时整棵子树被跳过
 val LastLocalScanKey = longPreferencesKey("lastLocalScan")
 
 /**

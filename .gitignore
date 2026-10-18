@@ -106,3 +106,7 @@ lint/tmp/
 .DS_Store
 
 /ffMetadataEx
+
+# 本地临时文件
+/temp/
+/gittemp/

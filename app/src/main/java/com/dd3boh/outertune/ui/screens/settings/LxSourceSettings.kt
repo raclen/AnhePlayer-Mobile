@@ -1,5 +1,8 @@
 package com.dd3boh.outertune.ui.screens.settings
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -10,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,7 +52,7 @@ fun LxSourceSettings(
             val script = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (!script.isNullOrBlank()) {
                 onSourceScriptChange(script)
-                onSourceNameChange(uri.lastPathSegment?.substringAfterLast('/') ?: "洛雪自定义音源")
+                onSourceNameChange(resolveDisplayName(context, uri))
             }
         }
     }
@@ -63,6 +67,17 @@ fun LxSourceSettings(
             icon = { Icon(Icons.Rounded.AudioFile, null) },
             onClick = { launcher.launch(arrayOf("application/javascript", "text/javascript", "text/plain", "*/*")) },
         )
+        if (sourceName.isNotBlank()) {
+            PreferenceEntry(
+                title = { Text("恢复内置音源") },
+                description = "清除已导入的脚本，回到内置音源",
+                icon = { Icon(Icons.Rounded.Restore, null) },
+                onClick = {
+                    onSourceScriptChange("")
+                    onSourceNameChange("")
+                },
+            )
+        }
         ListPreference(
             title = { Text("默认音质") },
             icon = { Icon(Icons.Rounded.HighQuality, null) },
@@ -101,4 +116,15 @@ fun LxSourceSettings(
         windowInsets = TopBarInsets,
         scrollBehavior = scrollBehavior,
     )
+}
+
+/** 从 SAF 取用户看到的文件名，而不是 document:xxx 这种内部 id */
+private fun resolveDisplayName(context: Context, uri: Uri): String {
+    val fromProvider = runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    }.getOrNull()
+    return fromProvider?.takeIf { it.isNotBlank() }
+        ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+        ?: "洛雪自定义音源"
 }

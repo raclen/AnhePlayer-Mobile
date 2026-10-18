@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Base64
 import android.util.Log
+import com.dd3boh.outertune.BuildConfig
 import com.dd3boh.outertune.constants.LxSourceQualityKey
 import com.dd3boh.outertune.constants.LxSourceScriptKey
 import com.dd3boh.outertune.models.MediaMetadata
@@ -38,6 +39,8 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -101,6 +104,8 @@ object LxSourceRuntime {
                     runCatching { URI(url).scheme?.lowercase() }.getOrNull()?.let { scheme ->
                         Log.i(TAG, "音源播放地址协议: $scheme")
                     }
+                    // debug 包打印完整地址，便于排查 CDN 404 / 403 类问题
+                    if (BuildConfig.DEBUG) Log.d(TAG, "音源解析地址: $url")
                 }
                 ?: error("洛雪音源没有返回播放地址")
         } finally {
@@ -228,13 +233,42 @@ object LxSourceRuntime {
         handler?.post { context?.getGlobalObject()?.getJSFunction("__lx_native__")?.call(runtimeKey, action, data) }
     }
 
+    /**
+     * 销毁 QuickJS 运行时
+     *
+     * QuickJS 要求 create/destroy 必须在同一个线程，所以销毁动作必须回到运行时自己的
+     * HandlerThread 上执行，否则会抛 "Must be call same thread in QuickJSContext.create"。
+     */
     private fun destroyRuntime() {
-        context?.destroy()
+        val js = context
+        val handlerThread = thread
+        val runtimeHandler = handler
         context = null
-        thread?.quitSafely()
         thread = null
         handler = null
         loadedScriptHash = null
+
+        if (runtimeHandler == null) {
+            runCatching { js?.destroy() }
+                .onFailure { Log.w(TAG, "销毁洛雪音源运行时失败: ${it.message}") }
+            handlerThread?.quitSafely()
+            return
+        }
+
+        val done = CountDownLatch(1)
+        val posted = runtimeHandler.post {
+            try {
+                runCatching { js?.destroy() }
+                    .onFailure { Log.w(TAG, "销毁洛雪音源运行时失败: ${it.message}") }
+            } finally {
+                handlerThread?.quitSafely()
+                done.countDown()
+            }
+        }
+        if (!posted || !done.await(3, TimeUnit.SECONDS)) {
+            Log.w(TAG, "销毁洛雪音源运行时超时，强制释放资源")
+            handlerThread?.quitSafely()
+        }
     }
 
     private fun selectSupportedQuality(info: JsonObject, requested: String): String {

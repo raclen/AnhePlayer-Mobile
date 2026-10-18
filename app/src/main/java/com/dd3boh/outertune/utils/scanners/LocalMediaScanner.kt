@@ -29,7 +29,6 @@ import com.dd3boh.outertune.constants.ScannerImpl
 import com.dd3boh.outertune.constants.ScannerImplKey
 import com.dd3boh.outertune.constants.ScannerM3uMatchCriteria
 import com.dd3boh.outertune.constants.ScannerMatchCriteria
-import com.dd3boh.outertune.constants.scannerWhitelistExts
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.Artist
@@ -674,6 +673,8 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             TAG,
             "------------ SYNC: Starting MediaStore FULL Library Sync, refreshExisting = $refreshExisting ------------"
         )
+        // 隐藏文件夹判定（MediaStore 只拿得到真实路径）
+        val excludedFilter = ExcludedFolderFilter.fromUris(context, excludedScanPaths)
         scannerState.value = 2
         scannerProgressCurrent.value = 0
         scannerProgressProbe.value = 0
@@ -769,7 +770,7 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                 val rawDateModified = cursor.getString(dateModifiedColumn)
                 val path = cursor.getString(pathColumn)
                 val mime = cursor.getString(mimeColumn)
-                if (excludedScanPaths.any { path.startsWith(it.path ?: "") }) continue
+                if (excludedFilter.isExcluded(path, null)) continue
 
                 // extra stream info
                 var bitrate: Int? = null
@@ -1148,44 +1149,41 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
 
 
         /**
-         * Build a list of files to scan, taking in exclusions into account. Exclusions
+         * Build a list of files to scan, taking in hidden folders into account. Hidden folders
          * will override inclusions. All subdirectories will also be affected.
-         *
-         * Uri.path can be assumed to be non-null
          */
         fun getScanFiles(scanPaths: List<Uri>, excludedScanPaths: List<Uri>, context: Context): List<Uri> {
             val allSongs = ArrayList<Uri>()
-            val resultingPaths =
-                scanPaths.filterNot { incl ->
-                    excludedScanPaths.any { excl -> incl.path?.startsWith(excl.path.toString()) == true }
-                }
+            val excluded = ExcludedFolderFilter.fromUris(context, excludedScanPaths)
+            if (!excluded.isEmpty) {
+                Log.i(TAG, "隐藏文件夹生效：$excluded")
+            }
+
+            // 解析失败不应让整个扫描崩掉
+            fun absPath(uri: Uri): String? = runCatching { absoluteFilePathFromUri(context, uri) }.getOrNull()
+
+            // 整个扫描路径被隐藏时直接跳过
+            val resultingPaths = scanPaths.filterNot { incl ->
+                excluded.isExcluded(absPath(incl), incl)
+            }
 
             resultingPaths.forEach { path ->
                 try {
                     val file = documentFileFromUri(context, path)
                     if (file != null) {
                         val songsHere = ArrayList<DocumentFile>()
-                        scanDfRecursive(file, songsHere) {
-                            // Allow: audio mime, or certain audio exts
-                            // Disallow: x-mpegurl (m3u)
-                            val mime = it.type ?: return@scanDfRecursive false
-                            if (!mime.startsWith("audio")) {
-                                if (it.name?.substringAfterLast('.') !in scannerWhitelistExts) {
-                                    return@scanDfRecursive false
-                                }
-                            }
-                            if (mime == "audio/x-mpegurl") {
-                                return@scanDfRecursive false
-                            }
+                        scanDfRecursive(
+                            dir = file,
+                            result = songsHere,
+                            validator = { isAudioDocumentFile(it) },
+                            excluded = excluded,
+                        )
 
-                            return@scanDfRecursive true
-                        }
-
-                        allSongs.addAll(songsHere.fastFilter { incl ->
-                            !excludedScanPaths.any {
-                                incl.uri.path?.startsWith(it.path.toString()) == true
-                            }
-                        }.map { it.uri })
+                        allSongs.addAll(
+                            songsHere.fastFilter { song ->
+                                !excluded.isExcluded(absPath(song.uri), song.uri)
+                            }.map { it.uri }
+                        )
                     }
                 } catch (e: FileNotFoundException) {
                     e.printStackTrace()
@@ -1200,14 +1198,17 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             dir: DocumentFile,
             result: ArrayList<DocumentFile>,
             scanHidden: Boolean = false,
-            validator: ((DocumentFile) -> Boolean)? = null
+            validator: ((DocumentFile) -> Boolean)? = null,
+            excluded: ExcludedFolderFilter? = null,
         ): DocumentFile? {
             val files = dir.listFiles()
             for (file in files) {
                 if (!scanHidden && file.name?.startsWith(".") == true) continue
+                // 被隐藏的文件夹连同其子目录整个跳过
+                if (excluded != null && excluded.isExcludedUri(file.uri)) continue
                 if (file.isDirectory && (scanHidden || !file.listFiles().any { it.name == ".nomedia" })) {
                     // look into subdirs
-                    scanDfRecursive(file, result, scanHidden, validator)
+                    scanDfRecursive(file, result, scanHidden, validator, excluded)
                 } else {
                     // add if file matches
                     if (validator == null || validator(file)) {

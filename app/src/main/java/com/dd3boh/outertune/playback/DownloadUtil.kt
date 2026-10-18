@@ -3,6 +3,7 @@ package com.dd3boh.outertune.playback
 import android.content.Context
 import android.util.Log
 import androidx.core.net.toUri
+import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.DownloadExtraPathKey
 import com.dd3boh.outertune.constants.DownloadPathKey
 import com.dd3boh.outertune.constants.DownloadQualityKey
@@ -26,18 +27,32 @@ import com.dd3boh.outertune.utils.scanners.fileFromUri
 import com.dd3boh.outertune.utils.scanners.uriListFromString
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** 一次下载失败（带可读原因，用于提示用户） */
+data class DownloadFailure(
+    val songId: String,
+    val title: String,
+    val reason: String,
+)
 
 /** 直接将洛雪解析后的音频写入用户选择的下载目录，不使用 Media3 下载缓存。 */
 @Singleton
@@ -50,6 +65,14 @@ class DownloadUtil @Inject constructor(
     val downloads = MutableStateFlow<Map<String, LocalDateTime>>(emptyMap())
     var isProcessingDownloads = MutableStateFlow(false)
     private val pendingDownloadRequests = ConcurrentHashMap<String, PendingDownloadRequest>()
+
+    /** 失败歌曲的歌信息缓存，供「重试」使用（不依赖数据库里一定存在） */
+    private val failedDownloadRequests = ConcurrentHashMap<String, MediaMetadata>()
+
+    /** 下载失败提示事件：短时间内的多首失败会被合并成一批 */
+    val downloadFailures = MutableSharedFlow<List<DownloadFailure>>(extraBufferCapacity = 8)
+    private val failureBuffer = mutableListOf<DownloadFailure>()
+    private var failureFlushJob: Job? = null
 
     var localMgr = DownloadDirectoryManagerOt(
         context,
@@ -177,12 +200,29 @@ class DownloadUtil @Inject constructor(
 
     private fun enqueueDownload(song: MediaMetadata) {
         if (downloads.value.containsKey(song.id)) return
+        // 下载目录没设置时直接报错，不然要等解析完、下完才在保存阶段失败
+        if (localMgr.mainDir?.isDirectory != true) {
+            failedDownloadRequests[song.id] = song
+            reportDownloadFailure(
+                mediaId = song.id,
+                title = song.title,
+                reason = context.getString(R.string.download_error_no_directory),
+            )
+            return
+        }
         if (song.source == null) {
-            Log.w(tag, "跳过未配置洛雪来源的下载：${song.id}")
+            // 没有可用的音源信息：以前这里是静默 return，用户点下载毫无反应
+            failedDownloadRequests[song.id] = song
+            reportDownloadFailure(
+                mediaId = song.id,
+                title = song.title,
+                reason = context.getString(R.string.download_error_no_source),
+            )
             return
         }
 
         val quality = context.dataStore.get(DownloadQualityKey, DEFAULT_DOWNLOAD_QUALITY)
+        failedDownloadRequests.remove(song.id)
         pendingDownloadRequests[song.id] = PendingDownloadRequest(song, downloadQualityFallbacks(quality))
         downloads.update { it + (song.id to STATE_DOWNLOADING) }
         startDownload(song.id)
@@ -203,7 +243,7 @@ class DownloadUtil @Inject constructor(
                 )
             } catch (error: Throwable) {
                 reportException(error)
-                if (!retryDownload(mediaId, error)) markDownloadFailed(mediaId)
+                if (!retryDownload(mediaId, error)) markDownloadFailed(mediaId, error)
             }
         }
     }
@@ -211,6 +251,7 @@ class DownloadUtil @Inject constructor(
     private fun deleteSong(id: String): Boolean {
         val wasPending = downloads.value[id] == STATE_DOWNLOADING
         pendingDownloadRequests.remove(id)
+        failedDownloadRequests.remove(id)
         downloadMgr.cancel(id)
         val deleted = localMgr.deleteFile(id)
         downloads.update { it - id }
@@ -238,20 +279,113 @@ class DownloadUtil @Inject constructor(
         downloads.update { it + (mediaId to downloadedAt) }
     }
 
-    private fun markDownloadFailed(mediaId: String) {
+    /**
+     * 重新下载一首之前失败的歌曲（供失败提示的「重试」按钮使用）
+     */
+    fun retryFailedDownload(songId: String) {
+        if (downloads.value[songId] == STATE_DOWNLOADING) return
+        CoroutineScope(dlCoroutine).launch {
+            val metadata = failedDownloadRequests[songId]
+                ?: database.song(songId).first()?.toMediaMetadata()
+            if (metadata == null) {
+                reportDownloadFailure(
+                    mediaId = songId,
+                    title = songId,
+                    reason = context.getString(R.string.download_error_no_song),
+                )
+            } else {
+                enqueueDownload(metadata)
+            }
+        }
+    }
+
+    private fun markDownloadFailed(mediaId: String, error: Throwable?) {
+        val pending = pendingDownloadRequests[mediaId]
+        val title = pending?.song?.title
+        pending?.song?.let { failedDownloadRequests[mediaId] = it }
         pendingDownloadRequests.remove(mediaId)
         downloads.update { it - mediaId }
         database.transaction { updateDownloadStatus(mediaId, null) }
+
+        reportDownloadFailure(
+            mediaId = mediaId,
+            title = title ?: mediaId,
+            reason = describeDownloadError(error),
+        )
     }
 
+    /** 把异常翻译成用户能看懂的原因 */
+    private fun describeDownloadError(error: Throwable?): String = when {
+        error == null -> context.getString(R.string.download_error_unknown)
+        error is DownloadHttpException ->
+            if (error.responseCode == HTTP_NOT_FOUND) {
+                // 已经把所有音质都试过了
+                context.getString(R.string.download_error_not_found)
+            } else {
+                context.getString(R.string.download_error_http, error.responseCode)
+            }
+
+        error is TimeoutCancellationException -> context.getString(R.string.download_error_resolve_timeout)
+        error is SocketTimeoutException -> context.getString(R.string.download_error_timeout)
+        error is UnknownHostException -> context.getString(R.string.download_error_network)
+        error is IOException &&
+                (error.message?.contains("Invalid directory", true) == true ||
+                        error.message?.contains("Failed to initiate download manager", true) == true) ->
+            context.getString(R.string.download_error_no_directory)
+
+        error is IOException &&
+                error.message?.let { it.contains("save file", true) || it.contains("output stream", true) } == true ->
+            context.getString(R.string.download_error_save)
+
+        else -> error.message?.takeIf { it.isNotBlank() }
+            ?: error::class.simpleName
+            ?: context.getString(R.string.download_error_unknown)
+    }
+
+    /** 记录一次下载失败，并在短暂延迟后合并成一条提示事件 */
+    private fun reportDownloadFailure(mediaId: String, title: String, reason: String) {
+        Log.w(tag, "下载失败：$title ($mediaId) - $reason")
+        synchronized(failureBuffer) {
+            failureBuffer.removeAll { it.songId == mediaId }
+            failureBuffer.add(DownloadFailure(mediaId, title, reason))
+        }
+        failureFlushJob?.cancel()
+        failureFlushJob = CoroutineScope(dlCoroutine).launch {
+            delay(FAILURE_FLUSH_DELAY_MS)
+            val batch = synchronized(failureBuffer) {
+                val snapshot = failureBuffer.toList()
+                failureBuffer.clear()
+                snapshot
+            }
+            if (batch.isNotEmpty()) downloadFailures.emit(batch)
+        }
+    }
+
+    /**
+     * 失利降级：HTTP 404（某音质没资源）或音源解析失败时换下一档音质重试
+     */
     private fun retryDownload(mediaId: String, error: Throwable): Boolean {
-        if (error !is DownloadHttpException || error.responseCode != HTTP_NOT_FOUND) return false
         val pending = pendingDownloadRequests[mediaId] ?: return false
+        if (!isRetryableDownloadError(error)) return false
         if (!pending.moveToNextQuality()) return false
 
-        Log.w(tag, "下载地址返回 404，改用 ${pending.currentQuality} 重试：$mediaId")
+        Log.w(tag, "下载失败，改用 ${pending.currentQuality} 重试：$mediaId（${error.message}）")
         startDownload(mediaId)
         return true
+    }
+
+    private fun isRetryableDownloadError(error: Throwable): Boolean {
+        // 配置类错误重试多少次都没用
+        val message = error.message.orEmpty()
+        if (message.contains("尚未初始化") || message.contains("缺少洛雪")) return false
+
+        return when (error) {
+            is SocketTimeoutException -> false
+            is DownloadHttpException -> error.responseCode == HTTP_NOT_FOUND
+            is IllegalStateException, is IllegalArgumentException -> true
+            is IOException -> false
+            else -> false
+        }
     }
 
     init {
@@ -265,7 +399,9 @@ class DownloadUtil @Inject constructor(
                     }
                     is DownloadEvent.Success -> handleDownloadSuccess(event.mediaId, event.file)
                     is DownloadEvent.Failure -> {
-                        if (!retryDownload(event.mediaId, event.error)) markDownloadFailed(event.mediaId)
+                        if (!retryDownload(event.mediaId, event.error)) {
+                            markDownloadFailed(event.mediaId, event.error)
+                        }
                     }
                 }
             }
@@ -276,6 +412,9 @@ class DownloadUtil @Inject constructor(
     companion object {
         val STATE_DOWNLOADING: LocalDateTime = Instant.ofEpochMilli(1).atZone(ZoneOffset.UTC).toLocalDateTime()
         private const val HTTP_NOT_FOUND = 404
+
+        /** 下载失败提示的合井窗口 */
+        private const val FAILURE_FLUSH_DELAY_MS = 800L
     }
 }
 

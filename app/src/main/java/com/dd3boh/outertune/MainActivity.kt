@@ -61,8 +61,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.contentColorFor
@@ -291,6 +293,30 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+
+            // 下载失败提示：以前下载失败是静默的，用户看不到任何反馈
+            LaunchedEffect(Unit) {
+                downloadUtil.downloadFailures.collect { failures ->
+                    if (failures.isEmpty()) return@collect
+
+                    val first = failures.first()
+                    val message = if (failures.size == 1) {
+                        getString(R.string.download_failed_single, first.title, first.reason)
+                    } else {
+                        getString(R.string.download_failed_multiple, failures.size, first.title, first.reason)
+                    }
+
+                    val result = snackbarHostState.showSnackbar(
+                        message = message,
+                        actionLabel = getString(R.string.download_retry),
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        failures.forEach { downloadUtil.retryFailedDownload(it.songId) }
+                    }
+                }
+            }
 
             LaunchedEffect(useDarkTheme) {
                 setSystemBarAppearance(useDarkTheme)
