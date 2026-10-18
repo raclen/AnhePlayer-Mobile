@@ -13,8 +13,6 @@ import com.dd3boh.outertune.constants.ExcludedScanPathsKey
 import com.dd3boh.outertune.constants.LastLocalScanKey
 import com.dd3boh.outertune.constants.LastVersionKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
-import com.dd3boh.outertune.constants.OOBE_VERSION
-import com.dd3boh.outertune.constants.OobeStatusKey
 import com.dd3boh.outertune.constants.SCANNER_OWNER_LM
 import com.dd3boh.outertune.constants.ScanPathsKey
 import com.dd3boh.outertune.constants.ScannerImpl
@@ -54,7 +52,6 @@ suspend fun scanInit(
     snackbarHostState: SnackbarHostState
 ) {
     val MAIN_TAG = "MainOtActivity"
-    val oobeStatus = context.dataStore.get(OobeStatusKey, defaultValue = 0)
     val localLibEnable = context.dataStore.get(LocalLibraryEnableKey, defaultValue = true)
     val ds = context.dataStore.data.first()[ScannerSensitivityKey]
 //        .map { it[SkipSilenceKey] ?: false }
@@ -83,8 +80,8 @@ suspend fun scanInit(
     )
     val lastVer = context.dataStore.get(LastVersionKey, defaultValue = "0.0.0")
 
-    if (!autoScan || oobeStatus < OOBE_VERSION) {
-        Log.i(MAIN_TAG, "Automatic scan is disabled, and/or user has not passed OOBE")
+    if (!autoScan) {
+        Log.i(MAIN_TAG, "Automatic scan is disabled")
         return
     }
     val timeNow = LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli()

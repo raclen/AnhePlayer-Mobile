@@ -120,8 +120,12 @@ fun ColumnScope.DownloadsFrag() {
 
     PreferenceEntry(
         title = { Text(stringResource(R.string.dl_main_path_title)) },
-        description = if (downloadPath != "") uriListFromString(downloadPath).firstOrNull()
-            ?.let { absoluteFilePathFromUri(context, it) } ?: downloadPath else null,
+        description = if (downloadPath != "") {
+            uriListFromString(downloadPath).firstOrNull()
+                ?.let { absoluteFilePathFromUri(context, it) } ?: downloadPath
+        } else {
+            stringResource(R.string.dl_main_path_builtin_default)
+        },
         onClick = {
             showDlPathDialog = true
         },

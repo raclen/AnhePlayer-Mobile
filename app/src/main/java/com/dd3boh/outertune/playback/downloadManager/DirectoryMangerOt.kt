@@ -15,16 +15,38 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     var mainDir: DocumentFile? = null
     var allDirs: List<DocumentFile> = mutableListOf()
 
+    /** 未设置自定义目录时使用内置默认目录 Music/OuterTune（MediaStore，免授权） */
+    private var builtinDir: MediaStoreDownloadDir? = null
+
     var availableFiles: Set<DocumentFile> = mutableSetOf()
 
     init {
         doInit(context, dir, extraDirs)
     }
 
+    /** 是否已经具备可写入的下载目录 */
+    val isReady: Boolean
+        get() = builtinDir != null || mainDir?.isDirectory == true
+
+    /** 当前生效的下载目录描述 */
+    val activeDirDescription: String
+        get() = builtinDir?.getDisplayPath() ?: dir.toString()
+
     fun doInit(context: Context, dir: Uri, extraDirs: List<Uri>) {
         Log.i(TAG, "Initializing download manager: $dir")
         this.context = context
         this.dir = dir
+
+        // 空目录 = 使用内置默认目录，不需要任何授权
+        if (dir.toString().isBlank()) {
+            builtinDir = MediaStoreDownloadDir(context)
+            mainDir = null
+            allDirs = documentFileFromUri(context, extraDirs).filter { it.isDirectory }
+            Log.i(TAG, "使用内置默认下载目录: ${builtinDir?.getDisplayPath()}")
+            return
+        }
+        builtinDir = null
+
         try {
             mainDir = documentFileFromUri(context, dir)
             if (mainDir == null || !mainDir!!.isDirectory) {
@@ -63,6 +85,7 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     }
 
     fun deleteFile(mediaId: String): Boolean {
+        builtinDir?.let { return it.deleteFile(mediaId) }
         val file = isExists(mediaId)
         val deleted = file?.delete() == true
         if (deleted) {
@@ -77,6 +100,8 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
         displayName: String?,
         fileExtension: String = ".mka",
     ): Uri? {
+        builtinDir?.let { return it.saveFile(mediaId, input, displayName, fileExtension) }
+
         val resolver = context.contentResolver
         val directory = mainDir
 
@@ -114,6 +139,7 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     }
 
     fun getFilePathIfExists(mediaId: String): Uri? {
+        builtinDir?.let { return it.getFilePathIfExists(mediaId) }
         return isExists(mediaId)?.uri
     }
 
@@ -128,8 +154,16 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
 
     fun getAvailableFiles(useCache: Boolean = true): Map<String, Uri> {
         val availableFiles = HashMap<String, Uri>()
+        builtinDir?.let { builtin ->
+            availableFiles.putAll(builtin.getAvailableFiles())
+        }
         val result = ArrayList<DocumentFile>()
-        if (useCache) {
+        if (builtinDir != null) {
+            // 内置目录下额外目录仍然走 SAF
+            for (dir in allDirs) {
+                scanDfRecursive(dir, result, true)
+            }
+        } else if (useCache) {
             result.addAll(this.availableFiles.toList())
         } else {
             for (dir in allDirs) {
@@ -148,6 +182,7 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     }
 
     fun getMainDlStorageUsage(): Long {
+        builtinDir?.let { return it.getUsage() }
         if (mainDir == null) return -1L
         val result = ArrayList<DocumentFile>()
         scanDfRecursive(mainDir!!, result, true)

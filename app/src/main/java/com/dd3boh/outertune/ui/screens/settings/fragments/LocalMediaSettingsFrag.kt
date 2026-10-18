@@ -159,11 +159,8 @@ fun ColumnScope.LocalScannerFrag() {
 
     val (lastLocalScan, onLastLocalScanChange) = rememberPreference(LastLocalScanKey, 0L)
 
+    // 扫描路径变更后，之前扫出来的文件夹列表作废；不再自动弹选择框（未配置时用内置默认目录）
     LaunchedEffect(scanPaths) {
-        if (scanPaths.isBlank()) {
-            showScanPathDialog = true
-        }
-        // 扫描路径变更后，之前扫出来的文件夹列表作废
         MusicFolderDiscovery.invalidate()
     }
 

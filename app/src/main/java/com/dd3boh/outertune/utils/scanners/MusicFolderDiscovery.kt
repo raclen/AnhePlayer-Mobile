@@ -108,6 +108,8 @@ object MusicFolderDiscovery {
         scannedSongCount.value = 0
 
         val found = ArrayList<MusicFolderInfo>()
+        // 同一个目录只统计一次：扫描路径父子重叠、或目录里有符号链接环时不会重复/无限递归
+        val visited = HashSet<String>()
         var visitedDirs = 0
         var foundSongs = 0
 
@@ -125,6 +127,8 @@ object MusicFolderDiscovery {
                     context = context,
                     dir = root,
                     sink = found,
+                    visited = visited,
+                    depth = 0,
                     onDirVisited = {
                         visitedDirs++
                         if (visitedDirs % 10 == 0) scannedDirCount.value = visitedDirs
@@ -138,7 +142,9 @@ object MusicFolderDiscovery {
                 scannedSongCount.value = foundSongs
             }
 
-            folders.value = found.sortedBy { it.path.lowercase() }
+            folders.value = found
+                .distinctBy { it.uri.toString() }
+                .sortedBy { it.path.lowercase() }
             hasScanned.value = true
             Log.i(TAG, "------------ DISCOVERY: 完成，共 ${folders.value.size} 个含音乐文件夹 ------------")
         } catch (e: CancellationException) {
@@ -146,7 +152,8 @@ object MusicFolderDiscovery {
             hasScanned.value = false
             Log.i(TAG, "------------ DISCOVERY: 已取消 ------------")
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // SAF 实现千奇百怪，任何异常都不能让应用崩在用户脸上
             hasScanned.value = false
             scanFailed.value = true
             reportException(e)
@@ -158,9 +165,15 @@ object MusicFolderDiscovery {
 
     /** 清空缓存，下次打开对话框时重新扫描 */
     fun invalidate() {
-        scanJob?.cancel()
-        folders.value = emptyList()
+        cancel()
         hasScanned.value = false
+    }
+
+    /** 取消当前扫描（保留已得到的列表不覆盖） */
+    fun cancel() {
+        scanJob?.cancel()
+        scanJob = null
+        folders.value = emptyList()
         scanFailed.value = false
         scannedDirCount.value = 0
         scannedSongCount.value = 0
@@ -175,16 +188,27 @@ object MusicFolderDiscovery {
         context: Context,
         dir: DocumentFile,
         sink: MutableList<MusicFolderInfo>,
+        visited: MutableSet<String>,
+        depth: Int,
         onDirVisited: () -> Unit,
         onSongFound: () -> Unit,
     ): Int {
         currentCoroutineContext().ensureActive()
+
+        // 防环 + 防重复统计
+        val key = dir.uri.toString()
+        if (!visited.add(key)) return 0
+        // 深度上限，避免异常目录结构把栈打爆
+        if (depth > MAX_DEPTH) {
+            Log.w(TAG, "目录层数过深，跳过：$key")
+            return 0
+        }
         onDirVisited()
 
         val children = try {
             dir.listFiles()
-        } catch (e: Exception) {
-            Log.w(TAG, "无法读取文件夹: ${dir.uri}: ${e.message}")
+        } catch (e: Throwable) {
+            Log.w(TAG, "无法读取文件夹: $key: ${e.message}")
             return 0
         }
 
@@ -198,7 +222,7 @@ object MusicFolderDiscovery {
             if (name.startsWith(".")) continue
 
             if (isDirectoryFast(child)) {
-                total += walk(context, child, sink, onDirVisited, onSongFound)
+                total += walk(context, child, sink, visited, depth + 1, onDirVisited, onSongFound)
             } else if (isAudioDocumentFile(child)) {
                 direct++
                 total++
@@ -236,6 +260,9 @@ object MusicFolderDiscovery {
 
     private fun displayPath(context: Context, dir: DocumentFile): String =
         absoluteFilePathFromUri(context, dir.uri) ?: dir.uri.toString()
+
+    /** 目录递归深度上限 */
+    private const val MAX_DEPTH = 32
 }
 
 /**

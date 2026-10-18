@@ -125,8 +125,6 @@ import com.dd3boh.outertune.constants.MinMiniPlayerHeight
 import com.dd3boh.outertune.constants.MiniPlayerHeight
 import com.dd3boh.outertune.constants.NavigationBarAnimationSpec
 import com.dd3boh.outertune.constants.NavigationBarHeight
-import com.dd3boh.outertune.constants.OOBE_VERSION
-import com.dd3boh.outertune.constants.OobeStatusKey
 import com.dd3boh.outertune.constants.PureBlackKey
 import com.dd3boh.outertune.constants.SlimNavBarKey
 import com.dd3boh.outertune.db.MusicDatabase
@@ -147,7 +145,6 @@ import com.dd3boh.outertune.ui.screens.HistoryScreen
 import com.dd3boh.outertune.ui.screens.HomeScreen
 import com.dd3boh.outertune.ui.screens.PlayerScreen
 import com.dd3boh.outertune.ui.screens.Screens
-import com.dd3boh.outertune.ui.screens.SetupWizard
 import com.dd3boh.outertune.ui.screens.StatsScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistAlbumsScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistScreen
@@ -266,8 +263,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-
-            val (oobeStatus) = rememberPreference(OobeStatusKey, defaultValue = 0)
 
             var filter by rememberEnumPreference(LibraryFilterKey, Screens.LibraryFilter.ALL)
             val (slimNav) = rememberPreference(SlimNavBarKey, defaultValue = false)
@@ -637,9 +632,6 @@ class MainActivity : ComponentActivity() {
                                     composable("settings/about/oss_licenses") {
                                         LibrariesScreen(navController, scrollBehavior)
                                     }
-                                    composable("setup_wizard") {
-                                        SetupWizard(navController)
-                                    }
                                 }
                             }
 
@@ -878,12 +870,10 @@ class MainActivity : ComponentActivity() {
                                         scrollBehavior = scrollBehavior,
                                     )
 
-                                    if (oobeStatus >= OOBE_VERSION) {
-                                        BottomSheetPlayer(
-                                            state = playerBottomSheetState,
-                                            navController = navController,
-                                        )
-                                    }
+                                    BottomSheetPlayer(
+                                        state = playerBottomSheetState,
+                                        navController = navController,
+                                    )
                                     bottomSheetMenu()
 
                                     SnackbarHost(
@@ -892,12 +882,6 @@ class MainActivity : ComponentActivity() {
                                             .windowInsetsPadding(LocalPlayerAwareWindowInsets.current)
                                             .align(Alignment.BottomCenter),
                                     )
-                                }
-                            }
-                            // Setup wizard
-                            LaunchedEffect(Unit) {
-                                if (oobeStatus < OOBE_VERSION) {
-                                    navController.navigate("setup_wizard")
                                 }
                             }
 

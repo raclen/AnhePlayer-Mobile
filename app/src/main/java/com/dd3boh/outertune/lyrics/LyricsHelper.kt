@@ -9,6 +9,7 @@ import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.LyricsEntity
 import com.dd3boh.outertune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.source.lx.LxSourceRuntime
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.reportException
@@ -23,7 +24,8 @@ class LyricsHelper @Inject constructor(
     @ApplicationContext private val context: Context,
     val database: MusicDatabase
 ) {
-    private val lyricsProviders = listOf(LrcLibLyricsProvider, KuGouLyricsProvider)
+    // 歌词来源统一走洛雪音源；这里只保留 lrclib 作为洛雪没返回时的兜底（不再使用酷狗那套）
+    private val lyricsProviders = listOf(LrcLibLyricsProvider)
     private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)
 
     /**
@@ -112,6 +114,12 @@ class LyricsHelper @Inject constructor(
      * Lookup lyrics from remote providers
      */
     private suspend fun getRemoteLyrics(mediaMetadata: MediaMetadata): String? {
+        // 洛雪音源优先
+        if (mediaMetadata.source != null) {
+            runCatching { LxSourceRuntime.resolveLyric(mediaMetadata) }
+                .getOrNull()
+                ?.let { return it }
+        }
         lyricsProviders.forEach { provider ->
             if (provider.isEnabled(context)) {
                 provider.getLyrics(

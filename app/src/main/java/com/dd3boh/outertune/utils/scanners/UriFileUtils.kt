@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.documentfile.provider.TreeDocumentFileOt
@@ -29,6 +30,9 @@ fun uriListFromString(str: String): List<Uri> {
 }
 
 fun fileFromUri(context: Context, uri: Uri): File? {
+    // MediaStore 媒体 URI（内置默认目录扫描、下载后端都会用到）
+    if (uri.authority == MediaStore.AUTHORITY) return mediaStoreFileFromUri(context, uri)
+
     if (uri.authority != "com.android.externalstorage.documents") return null
 
     // SAF 下载文件通常是 tree/document 子 URI，而不是单独的 tree URI。
@@ -91,10 +95,19 @@ fun fileFromUri(context: Context, uri: Uri): File? {
 }
 
 fun absoluteFilePathFromUri(context: Context, uri: Uri): String? {
+    if (uri.authority == MediaStore.AUTHORITY) return mediaStoreFileFromUri(context, uri)?.absolutePath
     val dfUri = documentFileFromUri(context, uri)?.uri
     if (dfUri == null) return null
     return fileFromUri(context, dfUri)?.absolutePath
 }
+
+/** 从 MediaStore 媒体 URI 取回真实文件路径 */
+private fun mediaStoreFileFromUri(context: Context, uri: Uri): File? = runCatching {
+    context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
+        ?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0)?.let(::File) else null
+        }
+}.getOrNull()
 
 private fun customDocFileFromTreeTreeUri(context: Context, uri: Uri) = TreeDocumentFileOt(
     null, context, DocumentsContract.buildDocumentUriUsingTree(

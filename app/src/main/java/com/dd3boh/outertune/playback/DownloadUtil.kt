@@ -138,7 +138,7 @@ class DownloadUtil @Inject constructor(
             val existingBeforeScan = database.downloadedOrQueuedSongs().first()
 
             // 目录权限暂时失效或目录尚未初始化时不要清空数据库，否则下载列表会瞬间消失。
-            if (localMgr.allDirs.isEmpty()) return
+            if (!localMgr.isReady) return
             // 扫描结果为空通常意味着 SAF 临时权限/IO 异常；保留已有记录等待下次扫描。
             if (availableFiles.isEmpty() && existingBeforeScan.isNotEmpty()) {
                 val activeDownloads = downloads.value.filterValues { it == STATE_DOWNLOADING }
@@ -179,19 +179,19 @@ class DownloadUtil @Inject constructor(
         try {
             val activeDownloads = downloads.value.filterValues { it == STATE_DOWNLOADING }
             val databaseDownloads = database.downloadedOrQueuedSongs().first()
-            val foundIds = if (localMgr.allDirs.isEmpty()) {
+            val foundIds = if (!localMgr.isReady) {
                 emptySet()
             } else {
                 localMgr.getAvailableFiles(false).keys
             }
-            if (localMgr.allDirs.isNotEmpty()) {
+            if (localMgr.isReady) {
                 val missing = databaseDownloads.filter {
                     it.song.dateDownload != null && it.song.id !in foundIds && downloads.value[it.song.id] != STATE_DOWNLOADING
                 }
                 database.transaction { missing.forEach { removeDownloadSong(it.song.id) } }
             }
             downloads.value = activeDownloads + databaseDownloads
-                .filter { it.song.dateDownload != null && (localMgr.allDirs.isEmpty() || it.song.id in foundIds) }
+                .filter { it.song.dateDownload != null && (!localMgr.isReady || it.song.id in foundIds) }
                 .associate { it.song.id to it.song.dateDownload!! }
         } finally {
             isProcessingDownloads.value = false
@@ -201,7 +201,7 @@ class DownloadUtil @Inject constructor(
     private fun enqueueDownload(song: MediaMetadata) {
         if (downloads.value.containsKey(song.id)) return
         // 下载目录没设置时直接报错，不然要等解析完、下完才在保存阶段失败
-        if (localMgr.mainDir?.isDirectory != true) {
+        if (!localMgr.isReady) {
             failedDownloadRequests[song.id] = song
             reportDownloadFailure(
                 mediaId = song.id,
@@ -261,13 +261,14 @@ class DownloadUtil @Inject constructor(
 
     private suspend fun handleDownloadSuccess(mediaId: String, uri: android.net.Uri) {
         val downloadedAt = LocalDateTime.now()
-        val file = fileFromUri(context, uri)
         val song = pendingDownloadRequests[mediaId]?.song
             ?: database.song(mediaId).first()?.toMediaMetadata()
-        if (file != null && song != null) {
-            runCatching { metadataWriter.write(file, song) }
+        if (song != null) {
+            runCatching { metadataWriter.write(uri, song) }
                 .onFailure { reportException(it) }
         }
+        // 标签写入后再取路径，确保登记的是最终文件
+        val file = fileFromUri(context, uri)
         pendingDownloadRequests.remove(mediaId)
         database.transaction {
             if (file != null) {

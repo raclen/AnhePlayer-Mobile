@@ -9,6 +9,7 @@
 package com.dd3boh.outertune.utils.scanners
 
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -171,7 +172,18 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
         val scanPaths = uriListFromString(scanPaths)
         val excludedScanPaths = uriListFromString(excludedScanPaths)
 
-        getScanFiles(scanPaths, excludedScanPaths, context).forEach { uri ->
+        // 用户没配置扫描路径时，用内置默认目录（Music / Download）扫一遍，开箱即用
+        val files = if (scanPaths.isEmpty()) {
+            Log.i(TAG, "未配置扫描路径，使用内置默认目录：${DEFAULT_MEDIA_DIRS.joinToString("/")}")
+            val excluded = ExcludedFolderFilter.fromUris(context, excludedScanPaths)
+            getBuiltinMediaFiles(context).filterNot { uri ->
+                excluded.isExcluded(absoluteFilePathFromUri(context, uri), uri)
+            }
+        } else {
+            getScanFiles(scanPaths, excludedScanPaths, context)
+        }
+
+        files.forEach { uri ->
             if (SCANNER_DEBUG)
                 Log.v(TAG, "PATH: $uri")
 
@@ -710,8 +722,13 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
         val contentResolver: ContentResolver = context.contentResolver
         val selectionBuilder = StringBuilder("${MediaStore.Audio.Media.IS_MUSIC} != 0")
         val selectionArgs = mutableListOf<String>()
-        scanPaths.forEachIndexed { index, path ->
-            val convertedPath = absoluteFilePathFromUri(context, path)
+        // 未配置扫描路径时，用内置默认目录（Music / Download）
+        val effectiveScanDirs = if (scanPaths.isEmpty()) {
+            DEFAULT_MEDIA_DIRS.map { "/storage/emulated/0/$it" }
+        } else {
+            scanPaths.mapNotNull { absoluteFilePathFromUri(context, it) }
+        }
+        effectiveScanDirs.forEachIndexed { index, convertedPath ->
             if (index == 0) {
                 selectionBuilder.append(" AND (")
             } else {
@@ -1147,6 +1164,39 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
          * ==========================
          */
 
+
+        /** 内置默认扫描目录（用户未配置扫描路径时使用，MediaStore 直读，不需 SAF 授权） */
+        private val DEFAULT_MEDIA_DIRS = listOf("Music", "Download")
+
+        /**
+         * 内置默认扫描：从 MediaStore 列出 Music / Download 下的音频
+         */
+        fun getBuiltinMediaFiles(context: Context): List<Uri> {
+            val results = ArrayList<Uri>()
+            val selection = DEFAULT_MEDIA_DIRS.joinToString(" OR ") {
+                "${MediaStore.Audio.Media.DATA} LIKE ?"
+            }
+            val args = DEFAULT_MEDIA_DIRS.map { "%/${it}/%" }
+            runCatching {
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    selection,
+                    args.toTypedArray(),
+                    null,
+                )?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        results.add(
+                            ContentUris.withAppendedId(
+                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                cursor.getLong(0)
+                            )
+                        )
+                    }
+                }
+            }.onFailure { Log.w(TAG, "读取内置默认目录失败: ${it.message}") }
+            return results
+        }
 
         /**
          * Build a list of files to scan, taking in hidden folders into account. Hidden folders

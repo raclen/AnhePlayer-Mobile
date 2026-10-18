@@ -75,6 +75,16 @@
     <string name="m3u_import_playlist">导入播放列表 （m3u）</string>
     <string name="m3u_import_playlist_failed">导入失败</string>
     <string name="auto_scanner_title">自动扫描</string>
+    <string name="lx_source_title">洛雪音源</string>
+    <string name="lx_source_description">导入 JS 音源与设置播放、下载音质</string>
+    <string name="grp_content_and_download">内容与下载</string>
+    <string name="grp_local_media">本地媒体</string>
+    <string name="grp_local_media_description">扫描路径、隐藏文件夹与扫描方式</string>
+    <string name="grp_download_storage">下载与存储</string>
+    <string name="grp_download_storage_description">下载目录、下载音质与缓存清理</string>
+    <string name="grp_display_and_behavior">播放与界面</string>
+    <string name="grp_library_and_content_description">播放历史、筛选与高级选项</string>
+    <string name="dl_main_path_builtin_default">内部存储 / Music / OuterTune（默认）</string>
     <string name="scan_paths_title">配置扫描位置…</string>
     <string name="scan_paths_tooltip">所有子目录也将受到影响</string>
     <string name="scan_paths_add_folder">添加新文件夹</string>
@@ -94,6 +104,7 @@
     <string name="hidden_folders_empty">没有找到含音乐的文件夹</string>
     <string name="hidden_folders_scan_failed">扫描失败，可点“重新扫描”再试一次</string>
     <string name="hidden_folders_rescan">重新扫描</string>
+    <string name="hidden_folders_start_scan">扫描包含音乐的文件夹</string>
     <string name="hidden_folders_unhide_all">全部取消隐藏</string>
     <string name="scanner_local_title">本地扫描</string>
     <string name="scanner_manual_btn">触发手动同步</string>

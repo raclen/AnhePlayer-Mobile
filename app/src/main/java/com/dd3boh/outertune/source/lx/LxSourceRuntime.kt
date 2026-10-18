@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -48,6 +49,7 @@ import javax.crypto.spec.SecretKeySpec
 object LxSourceRuntime {
     private const val TAG = "LxSourceRuntime"
     private const val DEFAULT_QUALITY = "320k"
+    private const val EXTRA_REQUEST_TIMEOUT_MS = 15_000L
 
     private lateinit var appContext: Context
     private val httpClient = OkHttpClient()
@@ -110,6 +112,64 @@ object LxSourceRuntime {
                 ?: error("洛雪音源没有返回播放地址")
         } finally {
             pending.remove(requestKey)
+        }
+    }
+
+    /**
+     * 从洛雪音源获取歌词（失败返回 null，不抛异常）
+     */
+    suspend fun resolveLyric(metadata: MediaMetadata): String? = withContext(Dispatchers.IO) {
+        val data = requestExtra(metadata, "lyric") ?: return@withContext null
+        data["lyric"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * 从洛雪音源获取封面地址（失败返回 null，不抛异常）
+     */
+    suspend fun resolvePic(metadata: MediaMetadata): String? = withContext(Dispatchers.IO) {
+        val data = requestExtra(metadata, "pic") ?: return@withContext null
+        data["url"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * 通用附加信息请求（lyric / pic），任何失败都返回 null
+     */
+    private suspend fun requestExtra(metadata: MediaMetadata, action: String): JsonObject? {
+        return try {
+            if (!::appContext.isInitialized) return null
+            val source = metadata.source ?: return null
+            val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject } ?: return null
+
+            val script = appContext.dataStore[LxSourceScriptKey]
+                ?.takeIf(String::isNotBlank)
+                ?: appContext.assets.open("script/default-lx-source.js").bufferedReader().use { it.readText() }
+            ensureLoaded(script)
+
+            val requestKey = UUID.randomUUID().toString()
+            val deferred = CompletableDeferred<JsonObject>()
+            pending[requestKey] = deferred
+            val payload = buildJsonObject {
+                put("requestKey", requestKey)
+                put("data", buildJsonObject {
+                    put("source", source)
+                    put("action", action)
+                    put("info", musicInfo)
+                })
+            }
+            handler?.post {
+                context?.getGlobalObject()?.getJSFunction("__lx_native__")
+                    ?.call(runtimeKey, "request", payload.toString())
+            }
+            try {
+                val result = withTimeoutOrNull(EXTRA_REQUEST_TIMEOUT_MS) { deferred.await() } ?: return null
+                if (result["status"]?.jsonPrimitive?.contentOrNull != "true") return null
+                result["result"]?.jsonObject?.get("data")?.jsonObject
+            } finally {
+                pending.remove(requestKey)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "获取洛雪附加信息失败($action): ${e.message}")
+            null
         }
     }
 

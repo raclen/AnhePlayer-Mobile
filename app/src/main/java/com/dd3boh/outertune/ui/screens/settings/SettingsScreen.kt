@@ -18,82 +18,89 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Interests
-import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.SdCard
-import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.dd3boh.outertune.LocalSnackbarHostState
 import com.dd3boh.outertune.R
-import com.dd3boh.outertune.constants.LastVersionKey
-import com.dd3boh.outertune.constants.UpdateAvailableKey
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
-import com.dd3boh.outertune.utils.rememberPreference
+import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
 
 val SETTINGS_TAG = "Settings"
 
+/**
+ * 设置首页
+ *
+ * 分组按「内容与下载 → 播放与界面 → 其他」排列，每一项都能直达二级页，
+ * 不再出现「音乐库和内容」里再套「本地媒体」「储存」的重复入口。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
-    val context = LocalContext.current
-    val snackbarHostState = LocalSnackbarHostState.current
-    val uriHandler = LocalUriHandler.current
-
-    val lastVer by rememberPreference(LastVersionKey, defaultValue = "0.0.0")
-    val (updateAvailable, onUpdateAvailableChange) = rememberPreference(UpdateAvailableKey, defaultValue = false)
-
-    var newVersion by remember { mutableStateOf("") }
     ColumnWithContentPadding(
         modifier = Modifier.fillMaxHeight(),
         columnModifier = Modifier
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            PreferenceEntry(
-                title = { Text("洛雪音源") },
-                description = "导入 JS 音源与设置播放、下载音质",
-                icon = { Icon(Icons.Rounded.MusicNote, null) },
-                onClick = { navController.navigate("settings/lx_source") }
-            )
-            PreferenceEntry(
-                title = { Text(stringResource(R.string.grp_library_and_content)) },
-                icon = { Icon(Icons.AutoMirrored.Rounded.LibraryBooks, null) },
-                onClick = { navController.navigate("settings/library") }
-            )
-            PreferenceEntry(
-                title = { Text(stringResource(R.string.local_player_settings_title)) },
-                icon = { Icon(Icons.Rounded.SdCard, null) },
-                onClick = { navController.navigate("settings/local") }
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceGroupTitle(title = stringResource(R.string.grp_content_and_download))
 
         ElevatedCard(
             modifier = Modifier.fillMaxWidth()
         ) {
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.lx_source_title)) },
+                description = stringResource(R.string.lx_source_description),
+                icon = { Icon(Icons.Rounded.MusicNote, null) },
+                onClick = { navController.navigate("settings/lx_source") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.grp_local_media)) },
+                description = stringResource(R.string.grp_local_media_description),
+                icon = { Icon(Icons.Rounded.SdCard, null) },
+                onClick = { navController.navigate("settings/local") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.lyrics_settings_title)) },
+                icon = { Icon(Icons.Rounded.Lyrics, null) },
+                onClick = { navController.navigate("settings/library/lyrics") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.grp_download_storage)) },
+                description = stringResource(R.string.grp_download_storage_description),
+                icon = { Icon(Icons.Rounded.Download, null) },
+                onClick = { navController.navigate("settings/storage") }
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PreferenceGroupTitle(title = stringResource(R.string.grp_display_and_behavior))
+
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.grp_library_and_content)) },
+                description = stringResource(R.string.grp_library_and_content_description),
+                icon = { Icon(Icons.AutoMirrored.Rounded.LibraryBooks, null) },
+                onClick = { navController.navigate("settings/library") }
+            )
             PreferenceEntry(
                 title = { Text(stringResource(R.string.appearance)) },
                 icon = { Icon(Icons.Rounded.Palette, null) },
@@ -105,18 +112,6 @@ fun SettingsScreen(
                 onClick = { navController.navigate("settings/interface") }
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            PreferenceEntry(
-                title = { Text(stringResource(R.string.storage)) },
-                icon = { Icon(Icons.Rounded.Storage, null) },
-                onClick = { navController.navigate("settings/storage") }
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }

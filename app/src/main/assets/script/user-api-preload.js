@@ -159,12 +159,13 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
     local: [],
   }
   const supportActions = {
-    kw: ['musicUrl'],
-    kg: ['musicUrl'],
-    tx: ['musicUrl'],
-    wy: ['musicUrl'],
-    mg: ['musicUrl'],
-    xm: ['musicUrl'],
+    // 允许音源脚本提供歌词与封面，下载时会把它们写入音频文件
+    kw: ['musicUrl', 'lyric', 'pic'],
+    kg: ['musicUrl', 'lyric', 'pic'],
+    tx: ['musicUrl', 'lyric', 'pic'],
+    wy: ['musicUrl', 'lyric', 'pic'],
+    mg: ['musicUrl', 'lyric', 'pic'],
+    xm: ['musicUrl', 'lyric', 'pic'],
     local: ['musicUrl', 'lyric', 'pic'],
   }
 

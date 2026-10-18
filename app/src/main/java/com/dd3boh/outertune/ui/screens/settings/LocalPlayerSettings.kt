@@ -186,7 +186,7 @@ fun LocalPlayerSettings(
     }
 
     TopAppBar(
-        title = { Text(stringResource(R.string.local_player_settings_title)) },
+        title = { Text(stringResource(R.string.grp_local_media)) },
         navigationIcon = {
             IconButton(
                 onClick = navController::navigateUp,
