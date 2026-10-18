@@ -104,6 +104,12 @@
     <string name="hidden_folders_empty">没有找到含音乐的文件夹</string>
     <string name="hidden_folders_scan_failed">扫描失败，可点“重新扫描”再试一次</string>
     <string name="hidden_folders_rescan">重新扫描</string>
+    <string name="grp_music_folders">音乐文件夹</string>
+    <string name="folder_list_hint">点右侧「⋮」可隐藏或取消隐藏文件夹</string>
+    <string name="folder_list_hide">隐藏此文件夹</string>
+    <string name="folder_list_unhide">取消隐藏</string>
+    <string name="folder_list_hidden_badge">已隐藏</string>
+    <string name="more_options">更多选项</string>
     <string name="hidden_folders_start_scan">扫描包含音乐的文件夹</string>
     <string name="hidden_folders_unhide_all">全部取消隐藏</string>
     <string name="scanner_local_title">本地扫描</string>

@@ -62,12 +62,20 @@ class ExcludedFolderFilter private constructor(
     companion object {
         val EMPTY = ExcludedFolderFilter(emptyList(), emptyList())
 
+        /** 内置默认目录（MediaStore 扫描）使用 `builtin-abs:<绝对路径>` 作为隐藏标识 */
+        const val BUILTIN_SCHEME = "builtin-abs"
+
         fun fromUris(context: Context, uris: List<Uri>): ExcludedFolderFilter {
             if (uris.isEmpty()) return EMPTY
 
             val paths = ArrayList<String>(uris.size)
             val prefixes = ArrayList<String>(uris.size)
             uris.forEach { uri ->
+                // 内置目录（MediaStore 默认目录）以绝对路径保存，没有 SAF 树 URI
+                if (uri.scheme == BUILTIN_SCHEME) {
+                    uri.schemeSpecificPart?.takeIf(String::isNotBlank)?.let { paths.add(it.trimEnd('/')) }
+                    return@forEach
+                }
                 val prefix = uri.toString()
                 if (prefix.isNotBlank()) prefixes.add(prefix)
                 // 旧数据或异常 URI 不应让整体扫描崩掉

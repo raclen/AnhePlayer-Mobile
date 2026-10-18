@@ -166,6 +166,7 @@ import com.dd3boh.outertune.ui.screens.settings.AttributionScreen
 import com.dd3boh.outertune.ui.screens.settings.InterfaceSettings
 import com.dd3boh.outertune.ui.screens.settings.LibrariesScreen
 import com.dd3boh.outertune.ui.screens.settings.LibrarySettings
+import com.dd3boh.outertune.ui.screens.settings.LocalFoldersSettings
 import com.dd3boh.outertune.ui.screens.settings.LocalPlayerSettings
 import com.dd3boh.outertune.ui.screens.settings.LxSourceSettings
 import com.dd3boh.outertune.ui.screens.settings.LyricsSettings
@@ -619,6 +620,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                     composable("settings/storage") {
                                         StorageSettings(navController, scrollBehavior)
+                                    }
+                                    composable("settings/local/folders") {
+                                        LocalFoldersSettings(navController, scrollBehavior)
                                     }
                                     composable("settings/local") {
                                         LocalPlayerSettings(navController, scrollBehavior)

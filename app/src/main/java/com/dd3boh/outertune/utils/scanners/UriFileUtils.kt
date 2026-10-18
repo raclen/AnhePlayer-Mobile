@@ -96,9 +96,9 @@ fun fileFromUri(context: Context, uri: Uri): File? {
 
 fun absoluteFilePathFromUri(context: Context, uri: Uri): String? {
     if (uri.authority == MediaStore.AUTHORITY) return mediaStoreFileFromUri(context, uri)?.absolutePath
-    val dfUri = documentFileFromUri(context, uri)?.uri
-    if (dfUri == null) return null
-    return fileFromUri(context, dfUri)?.absolutePath
+    // 必须是 document URI 直接解析：若先包成 DocumentFile 会退化成 tree 根目录，
+    // 导致所有子目录都被显示/匹配成根目录路径。
+    return fileFromUri(context, uri)?.absolutePath
 }
 
 /** 从 MediaStore 媒体 URI 取回真实文件路径 */

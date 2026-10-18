@@ -134,7 +134,9 @@ fun LocalPlayerSettings(
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    LocalScannerFrag()
+                    LocalScannerFrag(
+                        onOpenMusicFolders = { navController.navigate("settings/local/folders") }
+                    )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 

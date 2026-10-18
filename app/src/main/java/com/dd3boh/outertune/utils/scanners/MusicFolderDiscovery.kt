@@ -10,7 +10,9 @@ package com.dd3boh.outertune.utils.scanners
 
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.dd3boh.outertune.constants.scannerWhitelistExts
@@ -26,6 +28,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 一个「含音乐的文件夹」
@@ -114,6 +117,21 @@ object MusicFolderDiscovery {
         var foundSongs = 0
 
         try {
+            if (scanPaths.isEmpty()) {
+                // 没有配置 SAF 扫描路径时，直接用内置默认目录（Music / Download）
+                scanBuiltinMediaDirs(
+                    context = context,
+                    sink = found,
+                    onDirVisited = {
+                        visitedDirs++
+                        if (visitedDirs % 10 == 0) scannedDirCount.value = visitedDirs
+                    },
+                    onSongFound = {
+                        foundSongs++
+                        if (foundSongs % 50 == 0) scannedSongCount.value = foundSongs
+                    },
+                )
+            }
             for (scanPath in scanPaths) {
                 currentCoroutineContext().ensureActive()
 
@@ -261,8 +279,72 @@ object MusicFolderDiscovery {
     private fun displayPath(context: Context, dir: DocumentFile): String =
         absoluteFilePathFromUri(context, dir.uri) ?: dir.uri.toString()
 
+    /**
+     * 内置默认目录（未配置 SAF 扫描路径时）：直接用 MediaStore 统计 Music / Download 下的目录
+     */
+    private fun scanBuiltinMediaDirs(
+        context: Context,
+        sink: MutableList<MusicFolderInfo>,
+        onDirVisited: () -> Unit,
+        onSongFound: () -> Unit,
+    ) {
+        val roots = BUILTIN_MEDIA_DIRS.map { File(Environment.getExternalStorageDirectory(), it).absolutePath }
+        val directCounts = HashMap<String, Int>()
+
+        val selection = BUILTIN_MEDIA_DIRS.joinToString(" OR ") { "${MediaStore.Audio.Media.DATA} LIKE ?" }
+        val args = BUILTIN_MEDIA_DIRS.map { "%/$it/%" }
+        runCatching {
+            context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Media.DATA),
+                selection,
+                args.toTypedArray(),
+                null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(0) ?: continue
+                    val parent = File(path).parent ?: continue
+                    directCounts[parent] = (directCounts[parent] ?: 0) + 1
+                    onSongFound()
+                }
+            }
+        }.onFailure { Log.w(TAG, "内置目录统计失败: ${it.message}") }
+
+        // 把直接计数向上累加到内置根目录，得到「含子文件夹」的总数
+        val totals = HashMap<String, Int>()
+        directCounts.forEach { (dir, count) ->
+            var current: String? = dir
+            while (current != null && roots.any { current == it || current.startsWith("$it/") }) {
+                totals[current] = (totals[current] ?: 0) + count
+                if (roots.any { it == current }) break
+                current = File(current).parent
+            }
+        }
+
+        totals.forEach { (dir, total) ->
+            onDirVisited()
+            sink.add(
+                MusicFolderInfo(
+                    uri = builtinFolderUri(dir),
+                    path = dir,
+                    directSongCount = directCounts[dir] ?: 0,
+                    songCount = total,
+                )
+            )
+        }
+    }
+
+    /** 内置目录的标识 URI（后续隐藏判定会拆回绝对路径） */
+    fun builtinFolderUri(absolutePath: String): Uri = Uri.parse("$BUILTIN_URI_PREFIX$absolutePath")
+
     /** 目录递归深度上限 */
     private const val MAX_DEPTH = 32
+
+    /** 内置默认扫描目录名 */
+    private val BUILTIN_MEDIA_DIRS = listOf("Music", "Download")
+
+    /** 内置目录标记前缀 */
+    private const val BUILTIN_URI_PREFIX = "builtin-abs:"
 }
 
 /**

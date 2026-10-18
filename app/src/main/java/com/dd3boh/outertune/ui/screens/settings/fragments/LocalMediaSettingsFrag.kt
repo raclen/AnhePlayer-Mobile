@@ -84,7 +84,6 @@ import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.dialog.ActionPromptDialog
-import com.dd3boh.outertune.ui.dialog.HiddenScanFoldersDialog
 import com.dd3boh.outertune.ui.dialog.InfoLabel
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.ui.utils.clearDtCache
@@ -109,7 +108,9 @@ import java.time.ZoneOffset
 
 
 @Composable
-fun ColumnScope.LocalScannerFrag() {
+fun ColumnScope.LocalScannerFrag(
+    onOpenMusicFolders: () -> Unit = {},
+) {
     val context = LocalContext.current
     val database = LocalDatabase.current
     val coroutineScope = rememberCoroutineScope()
@@ -128,13 +129,6 @@ fun ColumnScope.LocalScannerFrag() {
      * 是否显示「扫描路径」对话框
      */
     var showScanPathDialog by remember {
-        mutableStateOf(false)
-    }
-
-    /**
-     * 是否显示「隐藏文件夹」对话框
-     */
-    var showHiddenFoldersDialog by remember {
         mutableStateOf(false)
     }
 
@@ -382,19 +376,19 @@ fun ColumnScope.LocalScannerFrag() {
         },
     )
 
-    // 隐藏文件夹（原「排除的扫描路径」）
+    // 音乐文件夹：扫描后按文件夹管理隐藏
     val hiddenFolderCount = remember(excludedScanPaths) {
         uriListFromString(excludedScanPaths).size
     }
     PreferenceEntry(
-        title = { Text(stringResource(R.string.scan_paths_hidden)) },
+        title = { Text(stringResource(R.string.grp_music_folders)) },
         description = if (hiddenFolderCount > 0) {
             stringResource(R.string.scan_paths_hidden_count, hiddenFolderCount)
         } else {
             stringResource(R.string.scan_paths_hidden_description)
         },
         onClick = {
-            showHiddenFoldersDialog = true
+            onOpenMusicFolders()
         },
     )
 
@@ -423,12 +417,6 @@ fun ColumnScope.LocalScannerFrag() {
      * ---------------------------
      */
 
-
-    if (showHiddenFoldersDialog) {
-        HiddenScanFoldersDialog(
-            onDismiss = { showHiddenFoldersDialog = false }
-        )
-    }
 
     if (showScanPathDialog) {
         var tempScanPaths = remember { mutableStateListOf<Uri>() }
