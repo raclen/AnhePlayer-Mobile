@@ -17,10 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Interests
-import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.SdCard
@@ -77,11 +74,6 @@ fun SettingsScreen(
                 onClick = { navController.navigate("settings/local") }
             )
             PreferenceEntry(
-                title = { Text(stringResource(R.string.lyrics_settings_title)) },
-                icon = { Icon(Icons.Rounded.Lyrics, null) },
-                onClick = { navController.navigate("settings/library/lyrics") }
-            )
-            PreferenceEntry(
                 title = { Text(stringResource(R.string.grp_download_storage)) },
                 description = stringResource(R.string.grp_download_storage_description),
                 icon = { Icon(Icons.Rounded.Download, null) },
@@ -96,20 +88,9 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             PreferenceEntry(
-                title = { Text(stringResource(R.string.grp_library_and_content)) },
-                description = stringResource(R.string.grp_library_and_content_description),
-                icon = { Icon(Icons.AutoMirrored.Rounded.LibraryBooks, null) },
-                onClick = { navController.navigate("settings/library") }
-            )
-            PreferenceEntry(
                 title = { Text(stringResource(R.string.appearance)) },
                 icon = { Icon(Icons.Rounded.Palette, null) },
                 onClick = { navController.navigate("settings/appearance") }
-            )
-            PreferenceEntry(
-                title = { Text(stringResource(R.string.grp_interface)) },
-                icon = { Icon(Icons.Rounded.Interests, null) },
-                onClick = { navController.navigate("settings/interface") }
             )
         }
         Spacer(modifier = Modifier.height(96.dp))

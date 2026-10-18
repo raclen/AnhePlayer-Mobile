@@ -280,7 +280,7 @@ object MusicFolderDiscovery {
         absoluteFilePathFromUri(context, dir.uri) ?: dir.uri.toString()
 
     /**
-     * 内置默认目录（未配置 SAF 扫描路径时）：直接用 MediaStore 统计 Music / Download 下的目录
+     * 设备全盘音乐目录扫描（未配置 SAF 扫描路径时）：直接用 MediaStore 统计包含音乐文件的目录
      */
     private fun scanBuiltinMediaDirs(
         context: Context,
@@ -288,17 +288,21 @@ object MusicFolderDiscovery {
         onDirVisited: () -> Unit,
         onSongFound: () -> Unit,
     ) {
-        val roots = BUILTIN_MEDIA_DIRS.map { File(Environment.getExternalStorageDirectory(), it).absolutePath }
-        val directCounts = HashMap<String, Int>()
+        val storageRoots = runCatching {
+            context.getExternalFilesDirs(null).mapNotNull { dir ->
+                dir?.absolutePath?.substringBefore("/Android")?.takeIf { it.isNotBlank() }
+            }.distinct()
+        }.getOrNull()?.ifEmpty { null }
+            ?: listOf(Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0")
 
-        val selection = BUILTIN_MEDIA_DIRS.joinToString(" OR ") { "${MediaStore.Audio.Media.DATA} LIKE ?" }
-        val args = BUILTIN_MEDIA_DIRS.map { "%/$it/%" }
+        val directCounts = HashMap<String, Int>()
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         runCatching {
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(MediaStore.Audio.Media.DATA),
                 selection,
-                args.toTypedArray(),
+                null,
                 null,
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
@@ -308,16 +312,21 @@ object MusicFolderDiscovery {
                     onSongFound()
                 }
             }
-        }.onFailure { Log.w(TAG, "内置目录统计失败: ${it.message}") }
+        }.onFailure { Log.w(TAG, "扫描设备音乐文件夹失败: ${it.message}") }
 
-        // 把直接计数向上累加到内置根目录，得到「含子文件夹」的总数
+        // 把直接计数向上累加，得到每个文件夹「含子文件夹」的总数
         val totals = HashMap<String, Int>()
         directCounts.forEach { (dir, count) ->
-            var current: String? = dir
-            while (current != null && roots.any { current == it || current.startsWith("$it/") }) {
+            val normalizedDir = dir.trimEnd('/')
+            val root = storageRoots.firstOrNull {
+                val r = it.trimEnd('/')
+                normalizedDir == r || normalizedDir.startsWith("$r/")
+            }?.trimEnd('/')
+
+            var current: String? = normalizedDir
+            while (current != null && current != root && (root == null || current.startsWith(root))) {
                 totals[current] = (totals[current] ?: 0) + count
-                if (roots.any { it == current }) break
-                current = File(current).parent
+                current = File(current).parent?.trimEnd('/')
             }
         }
 

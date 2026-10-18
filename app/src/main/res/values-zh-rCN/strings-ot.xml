@@ -79,7 +79,7 @@
     <string name="lx_source_description">导入 JS 音源与设置播放、下载音质</string>
     <string name="grp_content_and_download">内容与下载</string>
     <string name="grp_local_media">本地媒体</string>
-    <string name="grp_local_media_description">扫描路径、隐藏文件夹与扫描方式</string>
+    <string name="grp_local_media_description">扫描音乐文件夹与管理隐藏</string>
     <string name="grp_download_storage">下载与存储</string>
     <string name="grp_download_storage_description">下载目录、下载音质与缓存清理</string>
     <string name="grp_display_and_behavior">播放与界面</string>

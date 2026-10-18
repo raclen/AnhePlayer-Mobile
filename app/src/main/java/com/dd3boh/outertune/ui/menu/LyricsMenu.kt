@@ -24,7 +24,6 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,15 +56,10 @@ import com.dd3boh.outertune.constants.MultilineLrcKey
 import com.dd3boh.outertune.db.entities.LyricsEntity
 import com.dd3boh.outertune.extensions.isInternetConnected
 import com.dd3boh.outertune.models.MediaMetadata
-import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
-import com.dd3boh.outertune.ui.component.SettingsClickToReveal
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.dialog.DefaultDialog
 import com.dd3boh.outertune.ui.dialog.ListDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
-import com.dd3boh.outertune.ui.screens.settings.fragments.LyricFormatFrag
-import com.dd3boh.outertune.ui.screens.settings.fragments.LyricParserFrag
-import com.dd3boh.outertune.ui.screens.settings.fragments.LyricSourceFrag
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LyricsMenuViewModel
 import org.akanework.gramophone.logic.utils.SemanticLyrics
@@ -349,49 +343,6 @@ fun LyricsMenu(
         )
     }
 
-    var showSettings by remember {
-        mutableStateOf(false)
-    }
-    if (showSettings) {
-        DefaultDialog(
-            onDismiss = { showSettings = false },
-            content = {
-                Column() {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 18.dp)
-                    )
-                    PreferenceGroupTitle(
-                        title = stringResource(R.string.grp_lyrics_format)
-                    )
-                    LyricFormatFrag()
-
-                    SettingsClickToReveal(stringResource(R.string.more_settings)) {
-                        PreferenceGroupTitle(
-                            title = stringResource(R.string.grp_lyrics_source)
-                        )
-                        LyricSourceFrag()
-
-                        PreferenceGroupTitle(
-                            title = stringResource(R.string.grp_lyrics_parser)
-                        )
-                        LyricParserFrag()
-                    }
-                }
-            },
-            buttons = {
-                TextButton(
-                    onClick = {
-                        showSettings = false
-                    }
-                ) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
-            }
-        )
-    }
-
     GridMenu(
         contentPadding = PaddingValues(
             start = 8.dp,
@@ -427,13 +378,6 @@ fun LyricsMenu(
             ) {
                 showDeleteLyric = true
             }
-        }
-
-        GridMenuItem(
-            icon = Icons.Rounded.Settings,
-            title = R.string.settings,
-        ) {
-            showSettings = true
         }
     }
 }
