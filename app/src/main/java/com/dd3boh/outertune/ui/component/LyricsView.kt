@@ -84,6 +84,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import org.akanework.gramophone.logic.utils.SemanticLyrics
 import org.akanework.gramophone.logic.utils.SemanticLyrics.LyricLine
+import org.akanework.gramophone.logic.utils.SemanticLyrics.Word
 import kotlin.math.abs
 
 /** 一句主歌词及其翻译行，作为滚动与高亮的最小单位。 */
@@ -126,7 +127,7 @@ fun PlayerLyrics?.toLyricsDisplay(): LyricsDisplay {
  */
 private fun buildLyricGroups(lines: List<LyricLine>): List<LyricGroup> {
     val mains = mutableListOf<Pair<LyricLine, MutableList<LyricLine>>>()
-    for (line in lines) {
+    for (line in mergeCharacterLevelLines(lines)) {
         if (line.isTranslated && mains.isNotEmpty()) {
             if (line.text.isNotBlank()) mains.last().second.add(line)
         } else {
@@ -148,8 +149,77 @@ private fun buildLyricGroups(lines: List<LyricLine>): List<LyricGroup> {
     }
 }
 
+/** 合并逐字行时视为句子边界的标点。 */
+private const val LyricLinePunctuation = "，。！？；：、…,.!?;:"
+
+/** 相邻逐字行允许的最大时间间隔，超过则视为换句。 */
+private const val CharacterLineMaxGapMs = 2_500L
+
+/**
+ * 部分内嵌歌词把每个字写成带独立时间戳的一行（逐字 LRC）。直接按行渲染会变成
+ * 「一行一个字」，这里把连续的单字行合并回一句，并保留每字时间生成逐字同步数据。
+ */
+private fun mergeCharacterLevelLines(lines: List<LyricLine>): List<LyricLine> {
+    val result = ArrayList<LyricLine>(lines.size)
+    var i = 0
+    while (i < lines.size) {
+        val first = lines[i]
+        if (!first.isCharacterLevelLine()) {
+            result.add(first)
+            i++
+            continue
+        }
+        var end = i + 1
+        while (end < lines.size) {
+            val previous = lines[end - 1]
+            val next = lines[end]
+            if (!next.isCharacterLevelLine() || next.speaker != previous.speaker) break
+            if (previous.text.last() in LyricLinePunctuation) break
+            val gap = next.start.toLong() - previous.start.toLong()
+            if (gap <= 0L || gap > CharacterLineMaxGapMs) break
+            end++
+        }
+        if (end - i < 2) {
+            result.add(first)
+            i++
+            continue
+        }
+        val text = StringBuilder()
+        val words = ArrayList<Word>(end - i)
+        for (k in i until end) {
+            val line = lines[k]
+            val charStart = text.length
+            text.append(line.text)
+            val wordEnd = if (k + 1 < end) {
+                val nextStart = lines[k + 1].start
+                if (nextStart > line.start) nextStart - 1uL else line.start
+            } else {
+                line.end.takeIf { it > line.start } ?: (line.start + 1uL)
+            }
+            words.add(Word(line.start..wordEnd, charStart..<text.length, false))
+        }
+        result.add(
+            LyricLine(
+                text = text.toString(),
+                start = first.start,
+                end = words.last().timeRange.last,
+                words = words,
+                speaker = first.speaker,
+                isTranslated = false,
+            )
+        )
+        i = end
+    }
+    return result
+}
+
+private fun LyricLine.isCharacterLevelLine(): Boolean =
+    text.length == 1 && !text[0].isWhitespace() && !isTranslated
+
 private fun highlightEnd(line: LyricLine, start: Long, nextStart: Long): Long {
-    line.words?.lastOrNull()?.let { return it.timeRange.last.toLong().coerceAtLeast(start + 1) }
+    line.words?.lastOrNull()?.let {
+        return minOf(it.timeRange.last.toLong(), nextStart).coerceAtLeast(start + 1)
+    }
     // 普通 LRC 只有行起始时间，结束时间取下一句开始。若中间夹着长间奏，按字数估算演唱时长，
     // 避免高亮在整个间奏里缓慢爬行。
     val parsedEnd = line.end.toLong().takeIf { it in (start + 1)..<Long.MAX_VALUE } ?: Long.MAX_VALUE
@@ -241,7 +311,7 @@ private fun KaraokeText(
     sungChars: () -> Float,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier) {
+    Box(modifier = modifier.fillMaxWidth()) {
         Text(
             text = text,
             style = style,
