@@ -44,9 +44,9 @@
 ## 本地 Android 构建使用临时 JDK 与 SDK
 
 - **触发信号**：本地执行 Gradle 编译或打包，且系统未配置 `JAVA_HOME`、`ANDROID_HOME`。
-- **根因/约束**：`media` composite build 不会继承根工程的 `local.properties`，而遗留 Kotlin 守护进程可能占用增量编译缓存。
-- **正确做法**：使用 `E:\code\jdk21-temp\jdk-21.0.12` 作为 `JAVA_HOME`，使用 `E:\code\android-sdk-temp` 作为 `ANDROID_HOME` 与 `ANDROID_SDK_ROOT`；PowerShell 中执行 `./gradlew.bat <task> --no-daemon "-Dkotlin.incremental=false"`。完成后执行 `./gradlew.bat --stop` 释放 Gradle/Kotlin JVM。
-- **验证方式**：`:app:compileCoreDebugKotlin` 输出 `BUILD SUCCESSFUL`；构建完成后 `./gradlew.bat --status` 不显示运行中的 daemon。
+- **根因/约束**：本机 JDK 固定在 `E:\code\jdk21-temp\jdk-21.0.12`，但系统 `JAVA_HOME` 为空且 PATH 中没有 `java`，直接执行 `java` 或 `gradlew` 会报找不到命令；`media` composite build 也不会继承根工程的 `local.properties`，遗留 Kotlin 守护进程还可能占用增量编译缓存。
+- **正确做法**：显式设置 `JAVA_HOME=E:\code\jdk21-temp\jdk-21.0.12`，`ANDROID_HOME` 与 `ANDROID_SDK_ROOT` 均为 `E:\code\android-sdk-temp`；PowerShell 中执行 `./gradlew.bat <task> --no-daemon "-Dkotlin.incremental=false"`，Git Bash 中先 `export JAVA_HOME="/e/code/jdk21-temp/jdk-21.0.12"` 再执行 `./gradlew <task> --no-daemon "-Dkotlin.incremental=false"`。完成后执行 `./gradlew --stop` 释放 Gradle/Kotlin JVM。
+- **验证方式**：`echo $JAVA_HOME`（PowerShell 为 `$env:JAVA_HOME`）指向上述目录，`:app:compileCoreDebugKotlin` 输出 `BUILD SUCCESSFUL`；构建完成后 `./gradlew.bat --status` 不显示运行中的 daemon。
 - **适用范围**：本机的编译、打包与 Gradle 故障排查。
 
 ## 首页与界面本地化保持精简

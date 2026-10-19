@@ -9,7 +9,7 @@ AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次
 <p align="center">
   <img src="./assets/微信图片_20260810082213_315_45.jpg" width="30%" alt="歌曲与媒体库">
   <img src="./assets/微信图片_20260810082214_316_45.jpg" width="30%" alt="搜索与音源切换">
-  <img src="./assets/微信图片_20260810082215_317_45.jpg" width="30%" alt="播放器">
+  <img src="https://img.meituan.net/content/b7b82e114a8b0c4da6b939030a9f3933729054.jpg" width="30%" alt="播放器">
 </p>
 
 <p align="center">歌曲与媒体库　·　搜索与音源切换　·　播放器</p>
