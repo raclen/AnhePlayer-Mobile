@@ -50,13 +50,68 @@ jobs:
       - name: Build core release APK
         run: ./gradlew assembleCoreRelease
 
+      - name: Extract current version changelog
+        id: changelog
+        run: |
+          python3 - << 'EOF'
+          import os
+
+          tag = os.environ.get('TAG_NAME', '')
+          changelog_path = 'CHANGELOG.md'
+          output_path = 'release_notes.md'
+
+          if not os.path.exists(changelog_path):
+              with open(output_path, 'w', encoding='utf-8') as f:
+                  f.write(f"# OuterTune {tag}\n")
+              exit(0)
+
+          with open(changelog_path, 'r', encoding='utf-8') as f:
+              lines = f.readlines()
+
+          current_block = []
+          in_target_version = False
+
+          # 如果有指定 tag (如 v1.0.18)，匹配指定版本的段落；否则匹配第一段 # OuterTune v
+          target_header_prefix = f"# OuterTune {tag}" if tag else ""
+
+          for line in lines:
+              if line.startswith('# OuterTune v'):
+                  if not in_target_version:
+                      if not target_header_prefix or line.strip().startswith(target_header_prefix):
+                          in_target_version = True
+                          current_block.append(line)
+                  else:
+                      break
+              elif in_target_version:
+                  current_block.append(line)
+
+          if not current_block:
+              # 回退策略：取第一段版本的 changelog
+              for line in lines:
+                  if line.startswith('# OuterTune v'):
+                      if not current_block:
+                          current_block.append(line)
+                      else:
+                          break
+                  elif current_block:
+                      current_block.append(line)
+
+          with open(output_path, 'w', encoding='utf-8') as f:
+              if current_block:
+                  f.writelines(current_block)
+              else:
+                  f.write(f"# OuterTune {tag}\n")
+          EOF
+        env:
+          TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
       - name: Create github release draft
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', env.date_tag) }}
           name: "OuterTune ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', env.date_tag) }}"
           draft: false
-          body_path: CHANGELOG.md
+          body_path: release_notes.md
           files: |
             app/build/outputs/apk/core/release/*.apk
         env:
