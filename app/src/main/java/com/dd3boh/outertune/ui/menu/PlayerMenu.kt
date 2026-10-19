@@ -1,9 +1,5 @@
 package com.dd3boh.outertune.ui.menu
 
-import android.content.Intent
-import android.media.audiofx.AudioEffect
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -136,8 +132,6 @@ fun PlayerMenu(
     val coroutineScope = rememberCoroutineScope()
 
     val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id).collectAsState(initial = null)
-
-    val activityResultLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
 
     var showChooseQueueDialog by rememberSaveable {
         mutableStateOf(false)
@@ -329,17 +323,11 @@ fun PlayerMenu(
         }
         GridMenuItem(
             icon = Icons.Rounded.Equalizer,
-            title = R.string.equalizer
+            title = R.string.sound_effects
         ) {
-            val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, playerConnection.player.audioSessionId)
-                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
-                putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-            }
-            if (intent.resolveActivity(context.packageManager) != null) {
-                activityResultLauncher.launch(intent)
-            }
             onDismiss()
+            playerBottomSheetState.collapseSoft()
+            navController.navigate("settings/equalizer")
         }
         GridMenuItem(
             icon = Icons.Rounded.Tune,

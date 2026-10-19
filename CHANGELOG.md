@@ -1,4 +1,14 @@
-# OuterTune v1.0.18
+# AnhePlayer v1.0.19
+
+## 音效
+
+- 播放页底部「音效」与播放器菜单「均衡器」改为进入应用内音效页，不再跳转系统音效面板。
+- 新增卡片式音效预设列表：Original Sound、低音 Bass、清澈 Clear V2、清澈悦耳、AKG K240 MKII、Apple AirPods、Apple AirPods Max、Apple AirPods Pro、Beats Pro、Bose QuietComfort 35 II。
+- 预设曲线基于公开 AutoEQ FixedBandEQ 数据，并自动适配设备实际均衡器频段。
+- 支持顶部总开关、选中高亮与持久化；重启、切歌后保持当前音效设置。
+- 设置页新增「音效」入口；设备不支持均衡器或开启音频硬件卸载时给出提示。
+
+# AnhePlayer v1.0.18
 
 ## 播放器与界面体验
 
@@ -15,7 +25,7 @@
 - 歌词来源标识：支持清晰标记当前歌词来源于内嵌元数据、本地同名文件还是在线音源。
 - 根目录推荐音源脚本更新为长青 SVIP v1.3.0。
 
-# OuterTune v1.0.17
+# AnhePlayer v1.0.17
 
 ## 本地媒体
 
@@ -31,7 +41,7 @@
 
 - 精简歌词菜单，移除手动格式/源/解析器配置弹窗；歌词统一由音源、内嵌元数据自动加载。
 
-# OuterTune v1.0.16
+# AnhePlayer v1.0.16
 
 ## 本地媒体
 
@@ -40,7 +50,7 @@
 - 未配置扫描路径时，音乐文件夹列表同样可用（直接读取内部存储 Music / Download）。
 - 修复子文件夹路径被显示成根目录路径的问题（绝对路径解析退化成树根）。
 
-# OuterTune v1.0.15
+# AnhePlayer v1.0.15
 
 ## 首次启动
 
@@ -62,7 +72,7 @@
 - 修复点击「隐藏文件夹」闪退的问题：扫描结果去重并防目录成环、列表不再使用重复 key、对话框改为独立布局。
 - 「隐藏文件夹」不再一打开就自动扫描，改为手动点「扫描包含音乐的文件夹」，扫描过程可取消。
 
-# OuterTune v1.0.14
+# AnhePlayer v1.0.14
 
 ## 下载
 
@@ -81,21 +91,21 @@
 - 「排除的扫描路径」改为「隐藏文件夹」：自动扫描扫描路径下所有含音乐的文件夹并列出曲目数，用开关直接隐藏，支持搜索、重新扫描和全部取消隐藏。
 - 修复旧排除逻辑拿 URI 路径与文件真实路径比较、永远不生效的问题，隐藏的文件夹在扫描时整棵跳过。
 
-# OuterTune v1.0.13
+# AnhePlayer v1.0.13
 
 ## 首次使用
 
 - 首次安装引导精简为欢迎、本地媒体和完成三步。
 - 主题、下载目录和歌曲缓存改为进入应用后按需配置，洛雪在线播放继续使用内置默认音源。
 
-# OuterTune v1.0.12
+# AnhePlayer v1.0.12
 
 ## 本地媒体
 
 - 在本地媒体设置中明确区分“扫描路径”和“排除的扫描路径”。
 - 支持单独添加不参与扫描的文件夹，其子目录也会一并排除。
 
-# OuterTune v1.0.11
+# AnhePlayer v1.0.11
 
 ## 播放与音源
 
@@ -108,7 +118,7 @@
 - 下载完成后写入标题、歌手、专辑、封面和内嵌 `LYRICS` 歌词。
 - 下载歌曲、最近播放和播放器通知优先读取本地文件封面，改善离线显示。
 
-# OuterTune v1.0.10
+# AnhePlayer v1.0.10
 
 ## 修复
 
@@ -116,7 +126,7 @@
 - 修复下载扫描在目录权限暂时失效或扫描结果为空时误清理下载记录的问题。
 - 本地媒体扫描过滤时长少于 30 秒的音频，避免录音片段进入媒体库。
 
-# OuterTune v1.0.9
+# AnhePlayer v1.0.9
 
 ## 导航与歌曲
 
@@ -129,39 +139,39 @@
 - 顶部搜索框改为按需展开，主页面只显示搜索按钮。
 - 搜索结果移除重复的顶部系统 inset，减少搜索框与结果之间的空白。
 
-# OuterTune v1.0.8
+# AnhePlayer v1.0.8
 
 ## 界面
 
 - 移除设置中的“播放器与音频”入口及独立设置页。
 - 清理失效的播放器设置导航；系统数据备份规则保留，不再显示为应用设置项。
 
-# OuterTune v1.0.7
+# AnhePlayer v1.0.7
 
 ## 构建
 
 - 正式构建仅输出 `core-arm64-v8a` APK，移除 x86、armeabi-v7a、universal 和 full 变体产物，减少下载数量并缩短构建时间。
 
-# OuterTune v1.0.6
+# AnhePlayer v1.0.6
 
 ## 修复
 
 - 允许洛雪音源返回的 HTTP 音频地址播放，修复酷狗、网易云和 QQ 音乐搜索结果播放时报 `CLEARTEXT communication not permitted`。
 - 记录音源播放地址协议，便于定位自定义音源的网络问题。
 
-# OuterTune v1.0.5
+# AnhePlayer v1.0.5
 
 ## 构建
 
 - Debug APK 与 JVM 单测保持阻断校验；Android Lint 改为独立非阻断检查，保留现有规则报告而不影响 APK 交付。
 
-# OuterTune v1.0.4
+# AnhePlayer v1.0.4
 
 ## 修复
 
 - 修复 GitHub Actions 不允许在步骤条件中直接读取签名 Secrets 导致工作流校验失败的问题。
 
-# OuterTune v1.0.3
+# AnhePlayer v1.0.3
 
 ## 修复
 
@@ -169,19 +179,19 @@
 - 修复 Android 媒体搜索入口缺少 `MEDIA_PLAY_FROM_SEARCH` 声明导致的 Lint 构建失败。
 - Release 草稿发布在未配置 `REL_TOKEN` 时自动使用 GitHub Actions 默认令牌。
 
-# OuterTune v1.0.2
+# AnhePlayer v1.0.2
 
 ## 修复
 
 - 恢复 `ffMetadataEx` Git 子模块，确保 GitHub Actions checkout 后可配置 Gradle 项目。
 
-# OuterTune v1.0.1
+# AnhePlayer v1.0.1
 
 ## 修复
 
 - 修复 GitHub Actions 中 Gradle Wrapper 缺少执行权限导致 Release 构建失败的问题。
 
-# OuterTune v1.0.0
+# AnhePlayer v1.0.0
 
 首个洛雪音源版公开版本。
 

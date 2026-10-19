@@ -56,7 +56,7 @@
     <string name="audio_offload">启用音频分流</string>
     <string name="audio_offload_description">使用分流音频路径进行音频播放。启用此功能可能会降低功耗，但可能会导致音频播放或后期处理出现问题。此偏好设置对不支持的编解码器或设备无效</string>
     <string name="keep_alive_title">防止系统终止应用程序</string>
-    <string name="keep_alive_description">使用常驻前台服务来防止 OuterTune 在后台关闭。</string>
+    <string name="keep_alive_description">使用常驻前台服务来防止 AnhePlayer 在后台关闭。</string>
     <string name="persistent_queue_desc_ot">应用程序启动时恢复以前打开的队列</string>
     <string name="min_playback_duration">最短播放时间</string>
     <string name="min_playback_duration_description">一首歌曲在被标记为“播放过”之前，必须播放完</string>
@@ -135,8 +135,8 @@
     <string name="import_failed_songs">无法导入：</string>
     <string name="dev_settings_title">启用开发人员设置</string>
     <string name="dev_settings_description">显示用于开发的其他高级设置</string>
-    <string name="oobe_welcome_message">欢迎来到 OuterTune</string>
-    <string name="oobe_complete">OuterTune设置完成，可立即使用。探索你的音乐，发现新歌曲，享受美好的体验吧！</string>
+    <string name="oobe_welcome_message">欢迎来到 AnhePlayer</string>
+    <string name="oobe_complete">AnhePlayer设置完成，可立即使用。探索你的音乐，发现新歌曲，享受美好的体验吧！</string>
     <string name="action_back">返回</string>
     <string name="action_next">下一个</string>
     <string name="action_skip">跳过</string>
@@ -180,7 +180,7 @@
     <string name="oobe_local_music_support">扩展的本地音乐支持</string>
     <string name="oobe_local_music_support_description">播放你的歌曲文件（例如MP3, OGG, FLAC等）</string>
     <string name="oobe_cross_platform_sync_description">保持你的音乐在不同设备中同调</string>
-    <string name="oobe_interface_subtitle">个性化OuterTune样式以及显示的内容。</string>
+    <string name="oobe_interface_subtitle">个性化AnhePlayer样式以及显示的内容。</string>
     <string name="action_cancel">取消</string>
     <string name="grp_sync">同步</string>
     <string name="check_for_update">检查更新</string>
@@ -281,7 +281,7 @@
     <string name="scanner_type_tooltip">系统扫描器的速度更快，但与其它提取器相比，在提取某些元数据时可能不够准确。请注意，切换扫描器并不会自动重新加载现有歌曲的元数据。</string>
     <string name="dl_rescan_description">若文件或文件夹发生变动，更新数据库并刷新下载记录</string>
     <string name="dl_rescan_confirm">是否立即重新扫描所有下载文件夹？这可能需要几分钟，具体取决于您的媒体库大小。</string>
-    <string name="dl_storage_tooltip">内部下载保存在应用的私有存储空间，没有 root 权限将无法访问。外部下载保存在您设备的外部存储空间（例如，/sdcard 或 micro SD 卡），可以使用文件管理器直接访问或编辑。对于“外部下载”文件夹，我们建议您选择一个专门用于歌曲下载的空文件夹，因为 OuterTune 可能会修改或删除该文件夹中的文件。\n\n额外导入文件夹是只读的，用于加载额外的歌曲。OuterTune 绝不会更改或删除这些文件夹中的文件。您可以在高级设置部分选择这些文件夹。\n\n当您清除下载时，只有内部歌曲会被删除。外部下载和额外导入的歌曲必须手动移除，可以通过歌曲菜单操作，也可以通过文件管理器手动删除。\n\n重新扫描下载文件夹： “外部下载”和“额外导入”文件夹中的歌曲不会自动更新。如果您使用文件管理器手动添加、移除或更改了文件，您可能需要重新扫描下载文件夹来更新应用的数据库。此选项可在高级设置部分找到。</string>
+    <string name="dl_storage_tooltip">内部下载保存在应用的私有存储空间，没有 root 权限将无法访问。外部下载保存在您设备的外部存储空间（例如，/sdcard 或 micro SD 卡），可以使用文件管理器直接访问或编辑。对于“外部下载”文件夹，我们建议您选择一个专门用于歌曲下载的空文件夹，因为 AnhePlayer 可能会修改或删除该文件夹中的文件。\n\n额外导入文件夹是只读的，用于加载额外的歌曲。AnhePlayer 绝不会更改或删除这些文件夹中的文件。您可以在高级设置部分选择这些文件夹。\n\n当您清除下载时，只有内部歌曲会被删除。外部下载和额外导入的歌曲必须手动移除，可以通过歌曲菜单操作，也可以通过文件管理器手动删除。\n\n重新扫描下载文件夹： “外部下载”和“额外导入”文件夹中的歌曲不会自动更新。如果您使用文件管理器手动添加、移除或更改了文件，您可能需要重新扫描下载文件夹来更新应用的数据库。此选项可在高级设置部分找到。</string>
     <string name="max_queues_title">最大播放队列数</string>
     <string name="oobe_welcome_tip">建议完成快速设置，以便配置主题、本地媒体、洛雪音源和下载等关键功能。</string>
     <string name="oobe_cache_title">歌曲缓存</string>
@@ -304,4 +304,7 @@
     <string name="lyrics_source_embedded" translatable="false">EMBEDDED</string>
     <string name="lyrics_source_local" translatable="false">LOCAL</string>
     <string name="lyrics_source_online" translatable="false">ONLINE</string>
+    <string name="sound_effects">音效</string>
+    <string name="equalizer_unavailable_device">当前设备不支持均衡器，音效无法生效</string>
+    <string name="equalizer_offload_warning">已开启音频硬件卸载，均衡器可能不生效，请在播放设置中关闭后重试</string>
 </resources>

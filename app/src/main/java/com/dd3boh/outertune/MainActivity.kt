@@ -163,6 +163,7 @@ import com.dd3boh.outertune.ui.screens.search.SearchBarContainer
 import com.dd3boh.outertune.ui.screens.settings.AboutScreen
 import com.dd3boh.outertune.ui.screens.settings.AppearanceSettings
 import com.dd3boh.outertune.ui.screens.settings.AttributionScreen
+import com.dd3boh.outertune.ui.screens.settings.EqualizerScreen
 import com.dd3boh.outertune.ui.screens.settings.LibrariesScreen
 import com.dd3boh.outertune.ui.screens.settings.LocalFoldersSettings
 import com.dd3boh.outertune.ui.screens.settings.LxSourceSettings
@@ -602,6 +603,9 @@ class MainActivity : ComponentActivity() {
                                     composable("settings/appearance") {
                                         AppearanceSettings(navController, scrollBehavior)
                                     }
+                                    composable("settings/equalizer") {
+                                        EqualizerScreen(navController, scrollBehavior)
+                                    }
                                     composable("settings/lx_source") {
                                         LxSourceSettings(navController, scrollBehavior)
                                     }
@@ -733,7 +737,7 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .size(36.dp)
                                                 .padding(start = 8.dp),
-                                            painter = painterResource(R.drawable.small_icon),
+                                            painter = painterResource(R.drawable.app_logo),
                                             contentDescription = null
                                         )
                                     },

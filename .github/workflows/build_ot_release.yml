@@ -62,7 +62,7 @@ jobs:
 
           if not os.path.exists(changelog_path):
               with open(output_path, 'w', encoding='utf-8') as f:
-                  f.write(f"# OuterTune {tag}\n")
+                  f.write(f"# AnhePlayer {tag}\n")
               exit(0)
 
           with open(changelog_path, 'r', encoding='utf-8') as f:
@@ -71,11 +71,11 @@ jobs:
           current_block = []
           in_target_version = False
 
-          # 如果有指定 tag (如 v1.0.18)，匹配指定版本的段落；否则匹配第一段 # OuterTune v
-          target_header_prefix = f"# OuterTune {tag}" if tag else ""
+          # 如果有指定 tag (如 v1.0.18)，匹配指定版本的段落；否则匹配第一段 # AnhePlayer v
+          target_header_prefix = f"# AnhePlayer {tag}" if tag else ""
 
           for line in lines:
-              if line.startswith('# OuterTune v'):
+              if line.startswith('# AnhePlayer v'):
                   if not in_target_version:
                       if not target_header_prefix or line.strip().startswith(target_header_prefix):
                           in_target_version = True
@@ -88,7 +88,7 @@ jobs:
           if not current_block:
               # 回退策略：取第一段版本的 changelog
               for line in lines:
-                  if line.startswith('# OuterTune v'):
+                  if line.startswith('# AnhePlayer v'):
                       if not current_block:
                           current_block.append(line)
                       else:
@@ -100,7 +100,7 @@ jobs:
               if current_block:
                   f.writelines(current_block)
               else:
-                  f.write(f"# OuterTune {tag}\n")
+                  f.write(f"# AnhePlayer {tag}\n")
           EOF
         env:
           TAG_NAME: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
@@ -109,7 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', env.date_tag) }}
-          name: "OuterTune ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', env.date_tag) }}"
+          name: "AnhePlayer ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', env.date_tag) }}"
           draft: false
           body_path: release_notes.md
           files: |

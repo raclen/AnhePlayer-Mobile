@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.SdCard
@@ -91,6 +92,12 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.appearance)) },
                 icon = { Icon(Icons.Rounded.Palette, null) },
                 onClick = { navController.navigate("settings/appearance") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.sound_effects)) },
+                description = stringResource(R.string.equalizer),
+                icon = { Icon(Icons.Rounded.GraphicEq, null) },
+                onClick = { navController.navigate("settings/equalizer") }
             )
         }
         Spacer(modifier = Modifier.height(96.dp))

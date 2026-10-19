@@ -1,8 +1,8 @@
-# OuterTune 洛雪版
+# AnhePlayer
 
-<img src="./assets/outertune.webp" height="88" alt="OuterTune 应用图标">
+<img src="./assets/outertune.webp" height="88" alt="AnhePlayer 应用图标">
 
-OuterTune 洛雪版是一个 Android 本地音乐播放器和在线音乐播放器二次开发项目。项目保留原有 Material 3 界面、播放队列和 Media3 播放内核，在线搜索与播放链路接入酷我搜索和洛雪自定义音源。
+AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次开发项目。项目保留原有 Material 3 界面、播放队列和 Media3 播放内核，在线搜索与播放链路接入酷我搜索和洛雪自定义音源。
 
 ## 界面预览
 
@@ -102,7 +102,7 @@ $env:ANDROID_SDK_ROOT = "PATH_TO_ANDROID_SDK"
 app/build/outputs/apk/core/debug/
 ```
 
-Debug 包名为 `com.dd3boh.outertune.debug`，应用名称为 **OuterTune 洛雪版**，可与其他安装包并存。
+Debug 包名为 `com.dd3boh.outertune.debug`，应用名称为 **AnhePlayer**，可与其他安装包并存。
 
 ## 项目状态
 

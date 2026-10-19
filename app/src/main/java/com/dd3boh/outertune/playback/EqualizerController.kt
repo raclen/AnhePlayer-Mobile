@@ -1,0 +1,184 @@
+package com.dd3boh.outertune.playback
+
+import android.content.Context
+import android.media.audiofx.Equalizer
+import android.util.Log
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import com.dd3boh.outertune.constants.DefaultEqualizerPresetId
+import com.dd3boh.outertune.constants.EqualizerEnabledKey
+import com.dd3boh.outertune.constants.EqualizerPreset
+import com.dd3boh.outertune.constants.EqualizerPresetFrequencies
+import com.dd3boh.outertune.constants.EqualizerPresetKey
+import com.dd3boh.outertune.constants.EqualizerPresets
+import com.dd3boh.outertune.utils.dataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.ln
+import kotlin.math.roundToInt
+
+/**
+ * 应用内均衡器控制器。
+ *
+ * 由 MusicService 持有，监听 DataStore 中的开关与预设，把 10 段预设曲线插值映射到
+ * 设备实际的均衡器频段。效果器绑定 ExoPlayer 的 audioSessionId，切歌不会失效。
+ */
+class EqualizerController(
+    private val context: Context,
+    private val player: ExoPlayer,
+    private val scope: CoroutineScope,
+) {
+    companion object {
+        private const val TAG = "EqualizerController"
+    }
+
+    private val lock = Any()
+
+    private var equalizer: Equalizer? = null
+    private var observeJob: Job? = null
+
+    @Volatile
+    private var currentEnabled = false
+
+    @Volatile
+    private var currentPresetId = DefaultEqualizerPresetId
+
+    /** 当前设备是否支持均衡器；页面用它做降级提示。 */
+    val isAvailable = MutableStateFlow(true)
+
+    private val playerListener = object : Player.Listener {
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            // 会话变化时效果器需要重新绑定，否则会作用在旧的 AudioTrack 上
+            scope.launch {
+                withContext(Dispatchers.Default) {
+                    synchronized(lock) { releaseEqualizerInternal() }
+                }
+                applySettings(currentEnabled, currentPresetId)
+            }
+        }
+    }
+
+    fun start() {
+        player.addListener(playerListener)
+        observeJob = scope.launch {
+            context.dataStore.data
+                .map { prefs ->
+                    (prefs[EqualizerEnabledKey] ?: false) to
+                        (prefs[EqualizerPresetKey] ?: DefaultEqualizerPresetId)
+                }
+                .distinctUntilChanged()
+                .collect { (enabled, presetId) ->
+                    applySettings(enabled, presetId)
+                }
+        }
+    }
+
+    fun release() {
+        observeJob?.cancel()
+        observeJob = null
+        player.removeListener(playerListener)
+        synchronized(lock) { releaseEqualizerInternal() }
+    }
+
+    private suspend fun applySettings(enabled: Boolean, presetId: String) {
+        currentEnabled = enabled
+        currentPresetId = presetId
+
+        withContext(Dispatchers.Default) {
+            synchronized(lock) {
+                val eq = ensureEqualizer() ?: return@synchronized
+                try {
+                    if (!enabled) {
+                        eq.enabled = false
+                        return@synchronized
+                    }
+
+                    val preset = EqualizerPresets.findById(presetId)
+                    if (eq.numberOfBands <= 0) {
+                        isAvailable.value = false
+                        return@synchronized
+                    }
+
+                    // 修改频段前先关闭，避免在部分设备上出现瞬时爆音
+                    eq.enabled = false
+                    val levelRange = eq.bandLevelRange
+                    val minLevel = levelRange[0].toInt()
+                    val maxLevel = levelRange[1].toInt()
+
+                    for (band in 0 until eq.numberOfBands.toInt()) {
+                        val centerFreq = eq.getCenterFreq(band.toShort())
+                        if (centerFreq <= 0) continue
+                        val gain = interpolateGain(centerFreq / 1000f, preset)
+                        val level = (gain * 100f).roundToInt().coerceIn(minLevel, maxLevel)
+                        eq.setBandLevel(band.toShort(), level.toShort())
+                    }
+
+                    eq.enabled = true
+                    isAvailable.value = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "应用均衡器预设失败", e)
+                    isAvailable.value = false
+                }
+            }
+        }
+    }
+
+    private fun ensureEqualizer(): Equalizer? {
+        equalizer?.let { return it }
+        return try {
+            Equalizer(0, player.audioSessionId).also {
+                it.enabled = false
+                equalizer = it
+                isAvailable.value = true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "当前设备无法使用均衡器", e)
+            isAvailable.value = false
+            null
+        }
+    }
+
+    private fun releaseEqualizerInternal() {
+        equalizer?.let {
+            try {
+                it.enabled = false
+            } catch (_: Exception) {
+            }
+            try {
+                it.release()
+            } catch (_: Exception) {
+            }
+        }
+        equalizer = null
+    }
+
+    /** 把 10 段预设按对数频率插值到设备频段，并叠加预增益。 */
+    private fun interpolateGain(freqHz: Float, preset: EqualizerPreset): Float {
+        val freqs = EqualizerPresetFrequencies
+        val gains = preset.gains
+        val gain = when {
+            freqHz <= freqs.first() -> gains.first()
+            freqHz >= freqs.last() -> gains.last()
+            else -> {
+                var result = gains.last()
+                for (i in 0 until freqs.lastIndex) {
+                    if (freqHz <= freqs[i + 1]) {
+                        val x0 = ln(freqs[i].toDouble())
+                        val x1 = ln(freqs[i + 1].toDouble())
+                        val t = ((ln(freqHz.toDouble()) - x0) / (x1 - x0)).toFloat()
+                        result = gains[i] + (gains[i + 1] - gains[i]) * t
+                        break
+                    }
+                }
+                result
+            }
+        }
+        return gain + preset.preamp
+    }
+}

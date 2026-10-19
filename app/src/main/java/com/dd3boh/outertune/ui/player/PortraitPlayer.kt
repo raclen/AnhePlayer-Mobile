@@ -1,11 +1,7 @@
 package com.dd3boh.outertune.ui.player
 
-import android.content.Intent
-import android.media.audiofx.AudioEffect
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -664,7 +660,6 @@ private fun PlayerToolbar(
     if (showSleepTimerDialog) {
         SleepTimerDialog(onDismiss = { showSleepTimerDialog = false })
     }
-    val equalizerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -703,18 +698,10 @@ private fun PlayerToolbar(
         ToolbarCell {
             PlayerIconButton(
                 painter = rememberVectorPainter(Icons.Rounded.GraphicEq),
-                contentDescription = stringResource(R.string.equalizer),
+                contentDescription = stringResource(R.string.sound_effects),
                 onClick = {
-                    val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                        putExtra(AudioEffect.EXTRA_AUDIO_SESSION, playerConnection.player.audioSessionId)
-                        putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
-                        putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-                    }
-                    if (intent.resolveActivity(context.packageManager) != null) {
-                        equalizerLauncher.launch(intent)
-                    } else {
-                        Toast.makeText(context, R.string.equalizer_unavailable, Toast.LENGTH_SHORT).show()
-                    }
+                    navController.navigate("settings/equalizer")
+                    playerSheetState.collapseSoft()
                 },
             )
         }

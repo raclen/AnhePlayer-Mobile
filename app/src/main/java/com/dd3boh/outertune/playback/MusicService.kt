@@ -175,6 +175,7 @@ class MusicService : MediaLibraryService(),
     lateinit var playerCache: SimpleCache
 
     lateinit var player: ExoPlayer
+    lateinit var equalizerController: EqualizerController
     private lateinit var mediaSession: MediaLibrarySession
 
     // Player components
@@ -254,6 +255,10 @@ class MusicService : MediaLibraryService(),
             .build()
 
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
+
+        // 应用内均衡器：绑定播放器音频会话，设置变化由 DataStore 驱动
+        equalizerController = EqualizerController(this, player, scope)
+        equalizerController.start()
 
         // Keep a connected controller so that notification works
         val sessionToken = SessionToken(this, ComponentName(this, MusicService::class.java))
@@ -972,6 +977,9 @@ class MusicService : MediaLibraryService(),
         Log.i(TAG, "Terminating MusicService.")
         deInitQueue()
 
+        if (::equalizerController.isInitialized) {
+            equalizerController.release()
+        }
         mediaSession.player.stop()
         mediaSession.release()
         mediaSession.player.release()
