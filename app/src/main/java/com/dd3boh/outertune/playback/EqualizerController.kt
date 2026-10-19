@@ -1,8 +1,10 @@
 package com.dd3boh.outertune.playback
 
 import android.content.Context
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.Equalizer
 import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.dd3boh.outertune.constants.DefaultEqualizerPresetId
@@ -36,10 +38,27 @@ class EqualizerController(
 ) {
     companion object {
         private const val TAG = "EqualizerController"
+
+        /**
+         * 查询设备是否实现了均衡器音效。
+         *
+         * 部分 ROM 在音频会话尚未激活时会拒绝创建效果器，这与“设备不支持”是两回事，
+         * 因此能力判定只认系统音效描述符；查询异常或返回空列表时保持乐观，交由创建结果决定。
+         */
+        private fun queryDeviceEqualizerSupport(): Boolean {
+            return try {
+                val effects = AudioEffect.queryEffects()
+                effects.isEmpty() || effects.any { it.type == AudioEffect.EFFECT_TYPE_EQUALIZER }
+            } catch (e: Exception) {
+                Log.w(TAG, "查询设备音效能力失败", e)
+                true
+            }
+        }
     }
 
     private val lock = Any()
 
+    @Volatile
     private var equalizer: Equalizer? = null
     private var observeJob: Job? = null
 
@@ -49,8 +68,8 @@ class EqualizerController(
     @Volatile
     private var currentPresetId = DefaultEqualizerPresetId
 
-    /** 当前设备是否支持均衡器；页面用它做降级提示。 */
-    val isAvailable = MutableStateFlow(true)
+    /** 当前设备是否具备均衡器能力；页面用它做降级提示。 */
+    val isAvailable = MutableStateFlow(queryDeviceEqualizerSupport())
 
     private val playerListener = object : Player.Listener {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -60,6 +79,13 @@ class EqualizerController(
                     synchronized(lock) { releaseEqualizerInternal() }
                 }
                 applySettings(currentEnabled, currentPresetId)
+            }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // 部分 ROM 只在音频流真正开始后才允许挂载效果器，这里补一次重试
+            if (isPlaying && currentEnabled && equalizer == null) {
+                scope.launch { applySettings(currentEnabled, currentPresetId) }
             }
         }
     }
@@ -92,16 +118,18 @@ class EqualizerController(
 
         withContext(Dispatchers.Default) {
             synchronized(lock) {
+                // 关闭时不需要创建效果器；播放器尚未建立音频会话时创建必然失败，
+                // 会误判为设备不支持，所以等开关真正打开或会话就绪后再绑定
+                if (!enabled) {
+                    releaseEqualizerInternal()
+                    return@synchronized
+                }
+
                 val eq = ensureEqualizer() ?: return@synchronized
                 try {
-                    if (!enabled) {
-                        eq.enabled = false
-                        return@synchronized
-                    }
-
                     val preset = EqualizerPresets.findById(presetId)
                     if (eq.numberOfBands <= 0) {
-                        isAvailable.value = false
+                        isAvailable.value = queryDeviceEqualizerSupport()
                         return@synchronized
                     }
 
@@ -123,7 +151,7 @@ class EqualizerController(
                     isAvailable.value = true
                 } catch (e: Exception) {
                     Log.w(TAG, "应用均衡器预设失败", e)
-                    isAvailable.value = false
+                    isAvailable.value = queryDeviceEqualizerSupport()
                 }
             }
         }
@@ -131,15 +159,25 @@ class EqualizerController(
 
     private fun ensureEqualizer(): Equalizer? {
         equalizer?.let { return it }
+
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) {
+            // 会话建立后 onAudioSessionIdChanged 会再次尝试绑定
+            Log.i(TAG, "播放器音频会话尚未建立，等待会话就绪后再绑定均衡器")
+            return null
+        }
+
         return try {
-            Equalizer(0, player.audioSessionId).also {
-                it.enabled = false
-                equalizer = it
-                isAvailable.value = true
-            }
+            val eq = Equalizer(0, audioSessionId)
+            equalizer = eq
+            eq.enabled = false
+            isAvailable.value = true
+            eq
         } catch (e: Exception) {
-            Log.w(TAG, "当前设备无法使用均衡器", e)
-            isAvailable.value = false
+            Log.w(TAG, "当前音频会话无法创建均衡器，audioSessionId=$audioSessionId", e)
+            releaseEqualizerInternal()
+            // 创建失败不等同于设备不支持，只有系统明确没有均衡器实现时才降级
+            isAvailable.value = queryDeviceEqualizerSupport()
             null
         }
     }

@@ -14,6 +14,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.database.SQLException
+import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.net.ConnectivityManager
 import android.os.Binder
@@ -225,6 +226,12 @@ class MusicService : MediaLibraryService(),
             .setSeekForwardIncrementMs(5000)
             .build()
             .apply {
+                // 主动分配音频会话 ID：会话未分配（0）时，部分设备无法创建均衡器等音效
+                val audioSessionId = getSystemService<AudioManager>()?.generateAudioSessionId()
+                if (audioSessionId != null && audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                    setAudioSessionId(audioSessionId)
+                }
+
                 // listeners
                 addListener(this@MusicService)
                 sleepTimer = SleepTimer(scope, this)
