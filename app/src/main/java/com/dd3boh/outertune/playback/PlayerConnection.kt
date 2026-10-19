@@ -26,20 +26,24 @@ import com.dd3boh.outertune.extensions.currentMetadata
 import com.dd3boh.outertune.extensions.getCurrentQueueIndex
 import com.dd3boh.outertune.extensions.getQueueWindows
 import com.dd3boh.outertune.extensions.metadata
+import com.dd3boh.outertune.lyrics.PlayerLyrics
 import com.dd3boh.outertune.playback.queues.Queue
 import com.dd3boh.outertune.utils.reportException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import org.akanework.gramophone.logic.utils.SemanticLyrics
+import kotlin.coroutines.cancellation.CancellationException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerConnection(
@@ -63,13 +67,54 @@ class PlayerConnection(
     val currentSong = mediaMetadata.flatMapLatest {
         database.song(it?.id)
     }
-    val currentLyrics: Flow<SemanticLyrics> = mediaMetadata.flatMapLatest { mediaMetadata ->
-        if (mediaMetadata != null) {
-            return@flatMapLatest flowOf(service.lyricsHelper.getLyrics(mediaMetadata) ?: uninitializedLyric)
-        } else {
-            return@flatMapLatest flowOf()
-        }
-    }
+
+    // 最近一次加载结果：重新展开播放器时直接复用，避免歌词区域重复闪烁加载状态
+    @Volatile
+    private var lastLoadedLyrics: PlayerLyrics? = null
+
+    // 歌词菜单中编辑、搜索或刷新得到的歌词，仅对对应歌曲生效
+    private val lyricsOverride = MutableStateFlow<PlayerLyrics?>(null)
+
+    /**
+     * 当前歌曲歌词。null 表示正在加载；[PlayerLyrics.lyrics] 为 null 表示未找到。
+     *
+     * 歌词读取包含 TagLib JNI、文件与网络 IO，放在 IO 线程执行，避免切歌时阻塞主线程。
+     * 切歌时先发出 null，避免短暂显示上一首歌曲的歌词。
+     */
+    val currentLyrics: StateFlow<PlayerLyrics?> = combine(
+        mediaMetadata
+            .distinctUntilChangedBy { it?.id }
+            .transformLatest { metadata ->
+                if (metadata == null) {
+                    emit(null)
+                    return@transformLatest
+                }
+                lastLoadedLyrics?.takeIf { it.mediaId == metadata.id }?.let {
+                    emit(it)
+                    return@transformLatest
+                }
+                emit(null)
+                val loaded = try {
+                    service.lyricsHelper.getLyricsWithSource(metadata)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reportException(e)
+                    null
+                }
+                val result = PlayerLyrics(
+                    mediaId = metadata.id,
+                    lyrics = loaded?.lyrics?.takeUnless { it == uninitializedLyric },
+                    source = loaded?.source,
+                )
+                lastLoadedLyrics = result
+                emit(result)
+            }
+            .flowOn(Dispatchers.IO),
+        lyricsOverride,
+    ) { loaded, override ->
+        if (override != null && override.mediaId == loaded?.mediaId) override else loaded
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val currentMediaItemIndex = MutableStateFlow(-1)
 
@@ -149,6 +194,17 @@ class PlayerConnection(
 
     fun toggleLibrary() {
         service.toggleLibrary()
+    }
+
+    /**
+     * 歌词菜单编辑、搜索或刷新后调用，立即替换指定歌曲的显示歌词。
+     */
+    fun overrideLyrics(mediaId: String, lyrics: SemanticLyrics?) {
+        lyricsOverride.value = PlayerLyrics(
+            mediaId = mediaId,
+            lyrics = lyrics?.takeUnless { it == uninitializedLyric },
+            source = null,
+        )
     }
 
     override fun onPlaybackStateChanged(state: Int) {

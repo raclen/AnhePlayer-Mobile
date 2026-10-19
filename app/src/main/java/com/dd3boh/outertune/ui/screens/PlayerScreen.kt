@@ -62,6 +62,10 @@ fun PlayerScreen(
 
     val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
 
+    val tabMode = context.tabMode()
+    val useLandscapeLayout = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+            !tabMode && context.supportsWideScreen()
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -73,6 +77,7 @@ fun PlayerScreen(
             playerBackground = playerBackground,
             showLyrics = showLyrics,
             useDarkTheme = useDarkTheme,
+            immersive = !useLandscapeLayout,
         )
         Log.v(TAG, "PLR-3.0")
 
@@ -83,8 +88,7 @@ fun PlayerScreen(
             initialAnchor = expandedAnchor,
         )
 
-        val tabMode = context.tabMode()
-        if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE && !tabMode && context.supportsWideScreen()) {
+        if (useLandscapeLayout) {
             LandscapePlayer(state, navController, queueBoard)
         } else {
             PortraitPlayer(state, navController, queueBoard)

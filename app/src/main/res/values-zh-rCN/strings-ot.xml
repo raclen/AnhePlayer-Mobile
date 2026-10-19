@@ -292,4 +292,16 @@
     <string name="audio_gapless_offload" translatable="false">无缝硬件卸载</string>
     <string name="audio_gapless_offload_description" translatable="false">设备和音频格式支持时允许无缝硬件卸载；若连续播放异常，建议关闭此选项</string>
     <string name="scanner_type_mediastore" translatable="false">（测试）使用系统媒体库扫描器和解析器</string>
+    <string name="play_mode_sequential">顺序播放</string>
+    <string name="play_mode_repeat_all">列表循环</string>
+    <string name="play_mode_repeat_one">单曲循环</string>
+    <string name="sleep_timer_cancelled">已取消睡眠定时</string>
+    <string name="equalizer_unavailable">未找到可用的系统均衡器</string>
+    <string name="player_previous">上一首</string>
+    <string name="player_next">下一首</string>
+    <string name="player_pause">暂停</string>
+    <string name="lyrics_badge" translatable="false">词</string>
+    <string name="lyrics_source_embedded" translatable="false">EMBEDDED</string>
+    <string name="lyrics_source_local" translatable="false">LOCAL</string>
+    <string name="lyrics_source_online" translatable="false">ONLINE</string>
 </resources>

@@ -35,7 +35,13 @@ class LyricsHelper @Inject constructor(
      *
      * @param mediaMetadata 待获取歌词的歌曲
      */
-    suspend fun getLyrics(mediaMetadata: MediaMetadata): SemanticLyrics? {
+    suspend fun getLyrics(mediaMetadata: MediaMetadata): SemanticLyrics? =
+        getLyricsWithSource(mediaMetadata).lyrics
+
+    /**
+     * 与 [getLyrics] 相同，额外返回歌词来源，供播放页显示来源标签。
+     */
+    suspend fun getLyricsWithSource(mediaMetadata: MediaMetadata): LoadedLyrics {
         val trim = context.dataStore.get(LyricTrimKey, defaultValue = false)
         val multiline = context.dataStore.get(MultilineLrcKey, defaultValue = true)
 
@@ -43,16 +49,16 @@ class LyricsHelper @Inject constructor(
 
         val parserOptions = LrcUtils.LrcParserOptions(trim, multiline, "Unable to parse lyrics")
         getEmbeddedLyrics(mediaMetadata, parserOptions)?.let {
-            return it
+            return LoadedLyrics(it, LyricsSource.EMBEDDED)
         }
 
         val cached = cache.get(mediaMetadata.id)?.firstOrNull()
         if (cached != null) {
-            return parseLrc(cached.lyrics, trim, multiline)
+            return LoadedLyrics(parseLrc(cached.lyrics, trim, multiline), LyricsSource.ONLINE)
         }
         val dbLyrics = database.lyrics(mediaMetadata.id).let { it.first()?.lyrics }
         if (dbLyrics != null && !prefLocal) {
-            return parseLrc(dbLyrics, trim, multiline)
+            return LoadedLyrics(parseLrc(dbLyrics, trim, multiline), LyricsSource.ONLINE)
         }
 
         val localLyrics: SemanticLyrics? =
@@ -62,10 +68,10 @@ class LyricsHelper @Inject constructor(
         // fallback to secondary provider when primary is unavailable
         if (prefLocal) {
             if (localLyrics != null) {
-                return localLyrics
+                return LoadedLyrics(localLyrics, LyricsSource.LOCAL)
             }
             if (dbLyrics != null) {
-                return parseLrc(dbLyrics, trim, multiline)
+                return LoadedLyrics(parseLrc(dbLyrics, trim, multiline), LyricsSource.ONLINE)
             }
 
             // "lazy eval" the remote lyrics cuz it is laughably slow
@@ -79,7 +85,7 @@ class LyricsHelper @Inject constructor(
                         )
                     )
                 }
-                return parseLrc(remoteLyrics, trim, multiline)
+                return LoadedLyrics(parseLrc(remoteLyrics, trim, multiline), LyricsSource.ONLINE)
             }
         } else {
             remoteLyrics = getRemoteLyrics(mediaMetadata)
@@ -92,9 +98,9 @@ class LyricsHelper @Inject constructor(
                         )
                     )
                 }
-                return parseLrc(remoteLyrics, trim, multiline)
+                return LoadedLyrics(parseLrc(remoteLyrics, trim, multiline), LyricsSource.ONLINE)
             } else if (localLyrics != null) {
-                return localLyrics
+                return LoadedLyrics(localLyrics, LyricsSource.LOCAL)
             }
 
         }
@@ -107,7 +113,7 @@ class LyricsHelper @Inject constructor(
                 )
             )
         }
-        return null
+        return LoadedLyrics(null, null)
     }
 
     /**
@@ -198,4 +204,24 @@ class LyricsHelper @Inject constructor(
 data class LyricsResult(
     val providerName: String,
     val lyrics: String,
+)
+
+/** 歌词来源，仅用于界面展示。 */
+enum class LyricsSource {
+    EMBEDDED, LOCAL, ONLINE
+}
+
+data class LoadedLyrics(
+    val lyrics: SemanticLyrics?,
+    val source: LyricsSource?,
+)
+
+/**
+ * 播放页当前歌词。[mediaId] 用于识别歌词归属，避免切歌瞬间显示上一首的歌词。
+ * [lyrics] 为 null 表示未找到歌词。
+ */
+data class PlayerLyrics(
+    val mediaId: String,
+    val lyrics: SemanticLyrics?,
+    val source: LyricsSource?,
 )

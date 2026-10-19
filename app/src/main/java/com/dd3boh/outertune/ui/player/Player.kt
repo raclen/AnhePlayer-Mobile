@@ -11,6 +11,7 @@ package com.dd3boh.outertune.ui.player
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
+import android.os.Build
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
@@ -185,6 +186,9 @@ fun BottomSheetPlayer(
 
     val qbInit by playerConnection.service.qbInit.collectAsState()
 
+    val useLandscapeLayout = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+            !context.tabMode() && context.supportsWideScreen()
+
     LaunchedEffect(qbInit, queueBoard.masterQueues.toList()) {
         Log.d(TAG, "Queues changed. qbInit = $qbInit")
         if (qbInit && !queueBoard.masterQueues.isEmpty() && state.isDismissed) {
@@ -203,6 +207,7 @@ fun BottomSheetPlayer(
                 playerBackground = playerBackground,
                 showLyrics = showLyrics,
                 useDarkTheme = useDarkTheme,
+                immersive = !useLandscapeLayout,
             )
         },
         collapsedBackgroundColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp),
@@ -215,163 +220,11 @@ fun BottomSheetPlayer(
     ) {
         Log.v(TAG, "PLR-3.0")
 
-        if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE && !context.tabMode() && context.supportsWideScreen()) {
+        if (useLandscapeLayout) {
             LandscapePlayer(state, navController, queueBoard)
         } else {
             PortraitPlayer(state, navController, queueBoard)
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun PortraitPlayer(
-    playerSheetState: BottomSheetState,
-    navController: NavController,
-    queueBoard: QueueBoard,
-    enableQueueSheet: Boolean = true,
-) {
-    val TAG = "BottomSheetPlayer"
-    Log.v(TAG, "PLR-3.1b")
-
-    val playerConnection = LocalPlayerConnection.current ?: return
-
-    val dismissedBound = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
-
-    val queueSheetState = rememberBottomSheetState(
-        dismissedBound = dismissedBound,
-        expandedBound = playerSheetState.expandedBound,
-        collapsedBound = dismissedBound + (QueuePeekHeight * 1.2f),
-        initialAnchor = collapsedAnchor,
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
-            .padding(bottom = queueSheetState.collapsedBound)
-    ) {
-        BoxWithConstraints(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .weight(1f)
-                .nestedScroll(playerSheetState.preUpPostDownNestedScrollConnection)
-        ) {
-            Log.v(TAG, "PLR-3.2b")
-            val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
-
-
-            val canSkipPrevious by playerConnection.canSkipPrevious.collectAsState()
-            val canSkipNext by playerConnection.canSkipNext.collectAsState()
-
-            val swipeToSkip by rememberPreference(SwipeToSkipKey, defaultValue = false)
-            val previousMediaMetadata = if (swipeToSkip && playerConnection.player.hasPreviousMediaItem()) {
-                val previousIndex = playerConnection.player.previousMediaItemIndex
-                playerConnection.player.getMediaItemAt(previousIndex).metadata
-            } else null
-
-
-            val nextMediaMetadata = if (swipeToSkip && playerConnection.player.hasNextMediaItem()) {
-                val nextIndex = playerConnection.player.nextMediaItemIndex
-                playerConnection.player.getMediaItemAt(nextIndex).metadata
-            } else null
-
-            val mediaItems = listOfNotNull(previousMediaMetadata, mediaMetadata, nextMediaMetadata)
-            val currentMediaIndex = mediaItems.indexOf(mediaMetadata)
-
-
-            var sliderPosition by remember {
-                mutableStateOf<Long?>(null)
-            }
-
-
-            if (!swipeToSkip) {
-                Thumbnail(
-                    modifier = Modifier
-//                                .width(horizontalLazyGridItemWidth)
-                        .animateContentSize(),
-                    sliderPositionProvider = { sliderPosition },
-                    showLyricsOnClick = true,
-                    customMediaMetadata = mediaMetadata
-                )
-            } else {
-                val thumbnailLazyGridState = rememberLazyGridState()
-                val currentItem by remember { derivedStateOf { thumbnailLazyGridState.firstVisibleItemIndex } }
-                val itemScrollOffset by remember { derivedStateOf { thumbnailLazyGridState.firstVisibleItemScrollOffset } }
-
-                LaunchedEffect(itemScrollOffset) {
-                    if (!thumbnailLazyGridState.isScrollInProgress || itemScrollOffset != 0) return@LaunchedEffect
-
-                    if (currentItem > currentMediaIndex)
-                        playerConnection.player.seekToNext()
-                    else if (currentItem < currentMediaIndex)
-                        playerConnection.player.seekToPreviousMediaItem()
-                }
-
-                LaunchedEffect(mediaMetadata, canSkipPrevious, canSkipNext) {
-                    // When the media item changes, scroll to it
-                    val index = maxOf(0, currentMediaIndex)
-
-                    // Only animate scroll when player expanded, otherwise animated scroll won't work
-                    if (playerSheetState.isExpanded)
-                        thumbnailLazyGridState.animateScrollToItem(index)
-                    else
-                        thumbnailLazyGridState.scrollToItem(index)
-                }
-
-                val horizontalLazyGridItemWidthFactor = 1f
-                val thumbnailSnapLayoutInfoProvider = remember(thumbnailLazyGridState) {
-                    SnapLayoutInfoProvider(
-                        lazyGridState = thumbnailLazyGridState,
-                        positionInLayout = { layoutSize, itemSize ->
-                            (layoutSize * horizontalLazyGridItemWidthFactor / 2f - itemSize / 2f)
-                        }
-                    )
-                }
-                val horizontalLazyGridItemWidth = maxWidth * horizontalLazyGridItemWidthFactor
-
-                LazyHorizontalGrid(
-                    state = thumbnailLazyGridState,
-                    rows = GridCells.Fixed(1),
-                    flingBehavior = rememberSnapFlingBehavior(thumbnailSnapLayoutInfoProvider),
-                    userScrollEnabled = playerSheetState.isExpanded,
-                    modifier = Modifier.padding(vertical = QueuePeekHeight / 2)
-                ) {
-                    items(
-                        items = mediaItems,
-                        key = { it.id }
-                    ) {
-                        Thumbnail(
-                            modifier = Modifier
-                                .width(horizontalLazyGridItemWidth)
-                                .animateContentSize(),
-                            sliderPositionProvider = { sliderPosition },
-                            showLyricsOnClick = true,
-                            customMediaMetadata = it
-                        )
-                    }
-                }
-            }
-        }
-
-        ControlsContent(playerSheetState, queueSheetState, navController, queueBoard)
-
-
-        Spacer(Modifier.height(24.dp))
-
-
-    }
-
-    if (enableQueueSheet) {
-        QueueSheet(
-            state = queueSheetState,
-            playerBottomSheetState = playerSheetState,
-            onTerminate = {
-                playerSheetState.dismiss()
-                queueBoard.detachedHead = false
-            },
-            navController = navController
-        )
     }
 }
 
@@ -1016,15 +869,26 @@ fun PlayerBackground(
     playerBackground: PlayerBackgroundStyle,
     showLyrics: Boolean,
     useDarkTheme: Boolean,
+    immersive: Boolean = false,
 ) {
     val TAG = "PlayerBackground"
     Log.v(TAG, "PLR_BG-1")
 
     val context = LocalContext.current
+    // 竖屏沉浸式：除「跟随主题」外始终使用深色封面背景，保证白色文字可读
+    val immersiveDark = immersive && playerBackground != PlayerBackgroundStyle.FOLLOW_THEME
+    // 系统低于 Android 12 时 blur 无效，沉浸式下改用取色渐变代替清晰封面
+    val useBlur = playerBackground == PlayerBackgroundStyle.BLUR &&
+            (!immersiveDark || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+    val useGradient = playerBackground == PlayerBackgroundStyle.GRADIENT ||
+            (immersiveDark && playerBackground == PlayerBackgroundStyle.BLUR && !useBlur)
 
     Box(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(NavigationBarDefaults.Elevation))
+            .background(
+                if (immersiveDark) ImmersivePlayerBaseColor
+                else MaterialTheme.colorScheme.surfaceColorAtElevation(NavigationBarDefaults.Elevation)
+            )
             .fillMaxSize()
     ) {
 
@@ -1035,8 +899,8 @@ fun PlayerBackground(
 
 
         // gradient colours
-        LaunchedEffect(mediaMetadata, playerBackground) {
-            if (playerBackground != PlayerBackgroundStyle.GRADIENT || context.isPowerSaver()) return@LaunchedEffect
+        LaunchedEffect(mediaMetadata, useGradient) {
+            if (!useGradient || context.isPowerSaver()) return@LaunchedEffect
 
             withContext(coilCoroutine) {
                 val result = context.imageLoader.execute(
@@ -1060,16 +924,16 @@ fun PlayerBackground(
                 fadeIn(tween(1000)).togetherWith(fadeOut(tween(1000)))
             }
         ) { metadata ->
-            if (playerBackground == PlayerBackgroundStyle.BLUR) {
+            if (useBlur) {
                 Log.v(TAG, "PLR-2.2a")
                 AsyncImage(
                     model = metadata?.getThumbnailModel(100, 100),
                     contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
+                    contentScale = if (immersiveDark) ContentScale.Crop else ContentScale.FillBounds,
                     modifier = Modifier
                         .fillMaxSize()
                         .blur(100.dp)
-                        .alpha(0.5f)
+                        .alpha(if (immersiveDark) 0.85f else 0.5f)
                 )
             }
         }
@@ -1080,17 +944,23 @@ fun PlayerBackground(
                 fadeIn(tween(1000)).togetherWith(fadeOut(tween(1000)))
             }
         ) { colors ->
-            if (playerBackground == PlayerBackgroundStyle.GRADIENT && colors.size >= 2) {
+            if (useGradient && colors.size >= 2) {
                 Log.v(TAG, "PLR-2.2b")
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(colors), alpha = 0.4f)
+                        .background(Brush.verticalGradient(colors), alpha = if (immersiveDark) 0.75f else 0.4f)
                 )
             }
         }
 
-        if (playerBackground != PlayerBackgroundStyle.FOLLOW_THEME && showLyrics) {
+        if (immersiveDark) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+            )
+        } else if (playerBackground != PlayerBackgroundStyle.FOLLOW_THEME && showLyrics) {
             Log.v(TAG, "PLR-2.2c")
             Box(
                 modifier = Modifier
@@ -1100,3 +970,5 @@ fun PlayerBackground(
         }
     }
 }
+
+private val ImmersivePlayerBaseColor = Color(0xFF1E1E22)
