@@ -9,7 +9,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OuterTune"
+rootProject.name = "AnhePlayer-Mobile"
 include(":app")
 include(":kugou")
 include(":lrclib")
