@@ -14,6 +14,7 @@ import com.dd3boh.outertune.constants.EqualizerPresetFrequencies
 import com.dd3boh.outertune.constants.EqualizerPresetKey
 import com.dd3boh.outertune.constants.EqualizerPresets
 import com.dd3boh.outertune.utils.dataStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,14 +79,14 @@ class EqualizerController(
                 withContext(Dispatchers.Default) {
                     synchronized(lock) { releaseEqualizerInternal() }
                 }
-                applySettings(currentEnabled, currentPresetId)
+                applySettingsSafely(currentEnabled, currentPresetId)
             }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             // 部分 ROM 只在音频流真正开始后才允许挂载效果器，这里补一次重试
             if (isPlaying && currentEnabled && equalizer == null) {
-                scope.launch { applySettings(currentEnabled, currentPresetId) }
+                scope.launch { applySettingsSafely(currentEnabled, currentPresetId) }
             }
         }
     }
@@ -100,7 +101,7 @@ class EqualizerController(
                 }
                 .distinctUntilChanged()
                 .collect { (enabled, presetId) ->
-                    applySettings(enabled, presetId)
+                    applySettingsSafely(enabled, presetId)
                 }
         }
     }
@@ -112,9 +113,30 @@ class EqualizerController(
         synchronized(lock) { releaseEqualizerInternal() }
     }
 
+    /**
+     * 应用设置，并吞掉非取消类异常。
+     *
+     * MusicService 的协程作用域没有异常处理器，这里漏出的异常会直接杀死进程。
+     */
+    private suspend fun applySettingsSafely(enabled: Boolean, presetId: String) {
+        try {
+            applySettings(enabled, presetId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "应用均衡器设置失败", e)
+        }
+    }
+
     private suspend fun applySettings(enabled: Boolean, presetId: String) {
         currentEnabled = enabled
         currentPresetId = presetId
+
+        // ExoPlayer 的公开 getter 必须在应用主线程调用，后台线程访问会被
+        // verifyApplicationThread 判定为错误线程并抛出 IllegalStateException
+        val audioSessionId = withContext(Dispatchers.Main.immediate) {
+            player.audioSessionId
+        }
 
         withContext(Dispatchers.Default) {
             synchronized(lock) {
@@ -125,7 +147,7 @@ class EqualizerController(
                     return@synchronized
                 }
 
-                val eq = ensureEqualizer() ?: return@synchronized
+                val eq = ensureEqualizer(audioSessionId) ?: return@synchronized
                 try {
                     val preset = EqualizerPresets.findById(presetId)
                     if (eq.numberOfBands <= 0) {
@@ -157,10 +179,9 @@ class EqualizerController(
         }
     }
 
-    private fun ensureEqualizer(): Equalizer? {
+    private fun ensureEqualizer(audioSessionId: Int): Equalizer? {
         equalizer?.let { return it }
 
-        val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) {
             // 会话建立后 onAudioSessionIdChanged 会再次尝试绑定
             Log.i(TAG, "播放器音频会话尚未建立，等待会话就绪后再绑定均衡器")
