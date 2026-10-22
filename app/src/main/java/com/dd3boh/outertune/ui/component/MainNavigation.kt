@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +24,8 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.TopBarInsets
@@ -46,6 +49,7 @@ private val drawerDestinations = listOf(
 fun MainNavigationDrawer(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
+    hasUnreadUpdate: Boolean = false,
 ) {
     ModalDrawerSheet {
         Spacer(Modifier.height(40.dp))
@@ -60,6 +64,15 @@ fun MainNavigationDrawer(
                 selected = currentRoute == destination.route ||
                     (currentRoute == "history" && destination.route == Screens.Songs.route),
                 icon = { Icon(destination.icon, contentDescription = null) },
+                badge = {
+                    if (destination.route == "settings/about" && hasUnreadUpdate) {
+                        val description = stringResource(R.string.app_update_unread)
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.semantics { contentDescription = description },
+                        )
+                    }
+                },
                 onClick = { onNavigate(destination.route) },
                 modifier = Modifier
                     .fillMaxWidth()

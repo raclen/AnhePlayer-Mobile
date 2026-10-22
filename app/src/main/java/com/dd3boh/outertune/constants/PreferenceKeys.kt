@@ -191,6 +191,13 @@ val LastUpdateCheckKey = longPreferencesKey("lastUpdateCheck")
 val LastVersionKey = stringPreferencesKey("lastVersion")
 val UpdateAvailableKey = booleanPreferencesKey("updateAvailable")
 
+// 更新检查独立保存缓存、弹窗与已读状态，不复用旧更新器的布尔标记。
+val AppUpdateReleaseKey = stringPreferencesKey("appUpdateRelease")
+val AppUpdateLastAttemptKey = longPreferencesKey("appUpdateLastAttempt")
+val AppUpdateLastSuccessKey = longPreferencesKey("appUpdateLastSuccess")
+val AppUpdatePromptedVersionKey = stringPreferencesKey("appUpdatePromptedVersion")
+val AppUpdateViewedVersionKey = stringPreferencesKey("appUpdateViewedVersion")
+
 val LanguageCodeToName = mapOf(
     "af" to "Afrikaans",
     "az" to "Azərbaycan",

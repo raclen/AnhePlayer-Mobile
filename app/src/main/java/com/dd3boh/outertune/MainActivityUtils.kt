@@ -11,7 +11,6 @@ import com.dd3boh.outertune.constants.AUTO_SCAN_SOFT_COOLDOWN
 import com.dd3boh.outertune.constants.AutomaticScannerKey
 import com.dd3boh.outertune.constants.ExcludedScanPathsKey
 import com.dd3boh.outertune.constants.LastLocalScanKey
-import com.dd3boh.outertune.constants.LastVersionKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.SCANNER_OWNER_LM
 import com.dd3boh.outertune.constants.ScanPathsKey
@@ -21,7 +20,6 @@ import com.dd3boh.outertune.constants.ScannerMatchCriteria
 import com.dd3boh.outertune.constants.ScannerSensitivityKey
 import com.dd3boh.outertune.constants.ScannerStrictExtKey
 import com.dd3boh.outertune.constants.ScannerStrictFilePathsKey
-import com.dd3boh.outertune.constants.UpdateAvailableKey
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.playback.DownloadUtil
 import com.dd3boh.outertune.playback.PlayerConnection
@@ -72,13 +70,6 @@ suspend fun scanInit(
     val strictFilePaths = context.dataStore.get(ScannerStrictFilePathsKey, defaultValue = false)
     val autoScan = context.dataStore.get(AutomaticScannerKey, defaultValue = true)
     val lastLocalScan = context.dataStore.get(LastLocalScanKey, 0L)
-
-    // updater
-    val updateAvailable = context.dataStore.get(
-        UpdateAvailableKey,
-        defaultValue = false
-    )
-    val lastVer = context.dataStore.get(LastVersionKey, defaultValue = "0.0.0")
 
     if (!autoScan) {
         Log.i(MAIN_TAG, "Automatic scan is disabled")

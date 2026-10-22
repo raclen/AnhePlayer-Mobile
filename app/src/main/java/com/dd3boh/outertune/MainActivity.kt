@@ -136,6 +136,7 @@ import com.dd3boh.outertune.playback.PlayerConnection
 import com.dd3boh.outertune.ui.component.rememberBottomSheetState
 import com.dd3boh.outertune.ui.component.MainNavigationDrawer
 import com.dd3boh.outertune.ui.component.MainNavigationTopBar
+import com.dd3boh.outertune.ui.component.AppUpdatePrompt
 import com.dd3boh.outertune.ui.component.shimmer.ShimmerTheme
 import com.dd3boh.outertune.ui.menu.BottomSheetMenu
 import com.dd3boh.outertune.ui.menu.MenuState
@@ -176,6 +177,7 @@ import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.lmScannerCoroutine
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
+import com.dd3boh.outertune.viewmodels.AppUpdateViewModel
 import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -197,6 +199,25 @@ class MainActivity : ComponentActivity() {
     private var playerConnection by mutableStateOf<PlayerConnection?>(null)
 
     val controllerViewModel: MediaControllerViewModel by viewModels()
+    private val appUpdateViewModel: AppUpdateViewModel by viewModels()
+    private var isActivityResumed by mutableStateOf(false)
+    private var hasActivityWindowFocus by mutableStateOf(false)
+
+    override fun onResume() {
+        super.onResume()
+        isActivityResumed = true
+        appUpdateViewModel.checkAutomatically()
+    }
+
+    override fun onPause() {
+        isActivityResumed = false
+        super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        hasActivityWindowFocus = hasFocus
+    }
 
     // storage permission helpers
     val permissionLauncher =
@@ -243,6 +264,8 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
             val haptic = LocalHapticFeedback.current
             val snackbarHostState = remember { SnackbarHostState() }
+            val appUpdateState by appUpdateViewModel.state.collectAsState()
+            var startupScanComplete by remember { mutableStateOf(false) }
 
             val enableDynamicTheme by rememberPreference(DynamicThemeKey, defaultValue = true)
             val darkTheme by rememberEnumPreference(DarkModeKey, defaultValue = DarkMode.AUTO)
@@ -279,10 +302,14 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 // local media & download folders auto scan
                 coroutineScope.launch(lmScannerCoroutine) {
-                    scanInit(
-                        this@MainActivity, database, downloadUtil, coroutineScope, playerConnection,
-                        snackbarHostState
-                    )
+                    try {
+                        scanInit(
+                            this@MainActivity, database, downloadUtil, coroutineScope, playerConnection,
+                            snackbarHostState
+                        )
+                    } finally {
+                        startupScanComplete = true
+                    }
                 }
             }
 
@@ -404,10 +431,12 @@ class MainActivity : ComponentActivity() {
                     )
 
 
+                    val menuSheetState = rememberModalBottomSheetState()
+                    val menuState = remember(menuSheetState) { MenuState(menuSheetState) }
                     CompositionLocalProvider(
                         LocalDatabase provides database,
                         LocalContentColor provides contentColorFor(MaterialTheme.colorScheme.surface),
-                        LocalMenuState provides MenuState(rememberModalBottomSheetState()),
+                        LocalMenuState provides menuState,
                         LocalPlayerConnection provides playerConnection,
                         LocalPlayerAwareWindowInsets provides playerAwareWindowInsets,
                         LocalDownloadUtil provides downloadUtil,
@@ -619,7 +648,7 @@ class MainActivity : ComponentActivity() {
                                         LocalFoldersSettings(navController, scrollBehavior)
                                     }
                                     composable("settings/about") {
-                                        AboutScreen(navController, scrollBehavior)
+                                        AboutScreen(navController, scrollBehavior, appUpdateViewModel)
                                     }
                                     composable("settings/about/attribution") {
                                         AttributionScreen(navController, scrollBehavior)
@@ -825,6 +854,7 @@ class MainActivity : ComponentActivity() {
                                 drawerContent = {
                                     MainNavigationDrawer(
                                         currentRoute = navBackStackEntry?.destination?.route,
+                                        hasUnreadUpdate = appUpdateState.hasUnreadUpdate,
                                         onNavigate = { route ->
                                             if (playerBottomSheetState.isExpanded) {
                                                 playerBottomSheetState.collapseSoft()
@@ -879,6 +909,20 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+
+                            AppUpdatePrompt(
+                                state = appUpdateState,
+                                viewModel = appUpdateViewModel,
+                                canShow = isActivityResumed && hasActivityWindowFocus && startupScanComplete &&
+                                    navBackStackEntry?.destination?.route == Screens.Songs.route &&
+                                    playerBottomSheetState.isCollapsed &&
+                                    drawerState.currentValue == DrawerValue.Closed &&
+                                    drawerState.targetValue == DrawerValue.Closed &&
+                                    !menuState.isVisible && snackbarHostState.currentSnackbarData == null,
+                                onViewUpdate = {
+                                    navController.navigate("settings/about") { launchSingleTop = true }
+                                },
+                            )
 
                             if (BuildConfig.DEBUG) {
                                 val debugColour = Color.Red

@@ -58,6 +58,7 @@ import com.dd3boh.outertune.constants.MAX_LM_SCANNER_JOBS
 import com.dd3boh.outertune.constants.OOBE_VERSION
 import com.dd3boh.outertune.constants.SNACKBAR_VERY_SHORT
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
+import com.dd3boh.outertune.ui.component.AppUpdateCard
 import com.dd3boh.outertune.ui.component.ContributorCard
 import com.dd3boh.outertune.ui.component.ContributorInfo
 import com.dd3boh.outertune.ui.component.ContributorType.CUSTOM
@@ -65,6 +66,8 @@ import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.SettingsClickToReveal
 import com.dd3boh.outertune.ui.component.button.IconLabelButton
 import com.dd3boh.outertune.utils.scanners.FFmpegScanner
+import com.dd3boh.outertune.updates.APP_PROJECT_URL
+import com.dd3boh.outertune.viewmodels.AppUpdateViewModel
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegLibrary
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +75,7 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegLibrary
 fun AboutScreen(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
+    updateViewModel: AppUpdateViewModel,
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboard.current
@@ -139,6 +143,11 @@ fun AboutScreen(
 
         Spacer(Modifier.height(4.dp))
 
+        AppUpdateCard(
+            viewModel = updateViewModel,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+
         Row(
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.padding(vertical = 16.dp)
@@ -146,19 +155,19 @@ fun AboutScreen(
             IconLabelButton(
                 text = "GitHub",
                 painter = painterResource(R.drawable.github),
-                onClick = { uriHandler.openUri("https://github.com/raclen/OuterTune") },
+                onClick = { uriHandler.openUri(APP_PROJECT_URL) },
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
             IconLabelButton(
                 text = stringResource(R.string.wiki),
                 icon = Icons.Outlined.Info,
-                onClick = { uriHandler.openUri("https://github.com/raclen/OuterTune/wiki") },
+                onClick = { uriHandler.openUri("$APP_PROJECT_URL/wiki") },
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
 
-        Spacer(Modifier.height(96.dp))
+        Spacer(Modifier.height(16.dp))
 
         Column(
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -187,13 +196,13 @@ fun AboutScreen(
                 PreferenceEntry(
                     title = { Text(stringResource(R.string.help_bug_report_action)) },
                     onClick = {
-                        uriHandler.openUri("https://github.com/raclen/OuterTune/issues")
+                        uriHandler.openUri("$APP_PROJECT_URL/issues")
                     }
                 )
                 PreferenceEntry(
                     title = { Text(stringResource(R.string.help_support_forum)) },
                     onClick = {
-                        uriHandler.openUri("https://github.com/raclen/OuterTune/discussions")
+                        uriHandler.openUri("$APP_PROJECT_URL/discussions")
                     }
                 )
                 PreferenceEntry(

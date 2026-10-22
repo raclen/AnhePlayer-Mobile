@@ -1,5 +1,13 @@
 # OuterTune 二次开发规则
 
+## 更新提示与正式发布边界
+
+- **触发信号**：修改版本检查、更新弹窗、导航红点或关于页更新入口。
+- **根因/约束**：旧更新器字段没有实际检查链路，旧关于链接指向 `raclen/OuterTune`；每次启动弹窗会打扰播放。
+- **正确做法**：更新来源固定为 `raclen/AnhePlayer-Mobile` 的 GitHub Releases；仅接受正式数字版本、非草稿/预发布且带对应 flavor 的已上传 `arm64-v8a-release` APK，版本名和 APK versionCode 均高于本机才提示。更新缓存、已弹版本、已读版本分别存入 DataStore；同版本自动弹窗最多一次，查看关于页后清除未读红点，但卡片保留到升级。自动检查按尝试时间限频 24 小时，手动检查可绕过限频；失败保留上次成功缓存。
+- **验证方式**：`:app:compileCoreDebugKotlin` 和非 UI 的 `:app:testCoreDebugUnitTest` 通过；手动确认首页提醒避开播放器、菜单与权限申请，稍后/重启不重复提醒，进入关于页清除红点，更高版本重新提醒。
+- **适用范围**：`updates`、`AppUpdateViewModel`、`MainActivity`、主抽屉和关于页。
+
 ## 沟通与发布反馈约定
 
 - **触发信号**：用户要求提交代码、推送 tag、通过 GitHub Actions 打包或发布新版本。
