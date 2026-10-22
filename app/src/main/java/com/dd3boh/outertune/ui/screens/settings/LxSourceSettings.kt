@@ -13,28 +13,38 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.HighQuality
-import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.dd3boh.outertune.LocalSnackbarHostState
 import com.dd3boh.outertune.constants.LxSourceNameKey
 import com.dd3boh.outertune.constants.LxSourceQualityKey
 import com.dd3boh.outertune.constants.LxSourceScriptKey
 import com.dd3boh.outertune.constants.DownloadQualityKey
 import com.dd3boh.outertune.constants.TopBarInsets
+import com.dd3boh.outertune.source.lx.LxSourceInstaller
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.ListPreference
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.button.IconButton
+import com.dd3boh.outertune.ui.dialog.TextFieldDialog
 import com.dd3boh.outertune.ui.utils.backToMain
 import com.dd3boh.outertune.utils.rememberPreference
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,10 +53,14 @@ fun LxSourceSettings(
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val context = LocalContext.current
-    val (sourceScript, onSourceScriptChange) = rememberPreference(LxSourceScriptKey, "")
+    val snackbarHostState = LocalSnackbarHostState.current
+    val coroutineScope = rememberCoroutineScope()
+    val (_, onSourceScriptChange) = rememberPreference(LxSourceScriptKey, "")
     val (sourceName, onSourceNameChange) = rememberPreference(LxSourceNameKey, "")
     val (quality, onQualityChange) = rememberPreference(LxSourceQualityKey, "320k")
     val (downloadQuality, onDownloadQualityChange) = rememberPreference(DownloadQualityKey, "320k")
+    var showUrlDialog by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val script = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
@@ -62,22 +76,17 @@ fun LxSourceSettings(
         columnModifier = Modifier.padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
     ) {
         PreferenceEntry(
-            title = { Text("导入洛雪自定义音源") },
-            description = sourceName.ifBlank { "当前使用内置：长青SVIP音源 v1.2.0" },
+            title = { Text("导入本地音源脚本") },
+            description = if (sourceName.isNotBlank()) "当前音源：$sourceName" else "尚未导入音源，点击选择本地 .js 脚本",
             icon = { Icon(Icons.Rounded.AudioFile, null) },
             onClick = { launcher.launch(arrayOf("application/javascript", "text/javascript", "text/plain", "*/*")) },
         )
-        if (sourceName.isNotBlank()) {
-            PreferenceEntry(
-                title = { Text("恢复内置音源") },
-                description = "清除已导入的脚本，回到内置音源",
-                icon = { Icon(Icons.Rounded.Restore, null) },
-                onClick = {
-                    onSourceScriptChange("")
-                    onSourceNameChange("")
-                },
-            )
-        }
+        PreferenceEntry(
+            title = { Text("从在线链接导入") },
+            description = if (isDownloading) "正在下载音源脚本…" else "粘贴指向 .js 音源脚本的 http/https 链接",
+            icon = { Icon(Icons.Rounded.Link, null) },
+            onClick = { if (!isDownloading) showUrlDialog = true },
+        )
         ListPreference(
             title = { Text("默认音质") },
             icon = { Icon(Icons.Rounded.HighQuality, null) },
@@ -103,6 +112,32 @@ fun LxSourceSettings(
             },
             onValueSelected = onDownloadQualityChange,
             isEnabled = true,
+        )
+    }
+
+    if (showUrlDialog) {
+        TextFieldDialog(
+            icon = { Icon(Icons.Rounded.Link, null) },
+            title = { Text("从在线链接导入") },
+            placeholder = { Text("https://example.com/lx-source.js") },
+            keyboardType = KeyboardType.Uri,
+            isInputValid = { it.isNotBlank() },
+            onDone = { url ->
+                coroutineScope.launch {
+                    isDownloading = true
+                    LxSourceInstaller.download(url)
+                        .onSuccess { imported ->
+                            onSourceScriptChange(imported.script)
+                            onSourceNameChange(imported.name)
+                            snackbarHostState.showSnackbar("音源已导入：${imported.name}")
+                        }
+                        .onFailure { error ->
+                            snackbarHostState.showSnackbar("导入失败：${error.message ?: "未知错误"}")
+                        }
+                    isDownloading = false
+                }
+            },
+            onDismiss = { showUrlDialog = false },
         )
     }
 

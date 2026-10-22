@@ -66,9 +66,7 @@ object LxSourceRuntime {
 
     suspend fun resolve(metadata: MediaMetadata, qualityOverride: String? = null): String = withContext(Dispatchers.IO) {
         check(::appContext.isInitialized) { "洛雪音源运行时尚未初始化" }
-        val script = appContext.dataStore[LxSourceScriptKey]
-            ?.takeIf(String::isNotBlank)
-            ?: appContext.assets.open("script/default-lx-source.js").bufferedReader().use { it.readText() }
+        val script = requireScript()
         ensureLoaded(script)
 
         val source = metadata.source ?: error("歌曲缺少洛雪来源信息")
@@ -142,7 +140,7 @@ object LxSourceRuntime {
 
             val script = appContext.dataStore[LxSourceScriptKey]
                 ?.takeIf(String::isNotBlank)
-                ?: appContext.assets.open("script/default-lx-source.js").bufferedReader().use { it.readText() }
+                ?: return null
             ensureLoaded(script)
 
             val requestKey = UUID.randomUUID().toString()
@@ -172,6 +170,12 @@ object LxSourceRuntime {
             null
         }
     }
+
+    /** 读取用户导入的音源脚本；未导入时给出明确配置提示，不再回退内置音源 */
+    private fun requireScript(): String =
+        appContext.dataStore[LxSourceScriptKey]
+            ?.takeIf(String::isNotBlank)
+            ?: error("尚未导入洛雪音源，请前往「设置 → 洛雪音源」导入音源脚本")
 
     @Synchronized
     private fun ensureLoaded(script: String) {

@@ -28,8 +28,8 @@ AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次
   - 仅当前播放歌曲在封面缺失时按需补充封面
   - 使用洛雪 JS 音源解析实际播放地址
   - 在线播放和下载统一通过洛雪音源解析
-  - 内置 `长青SVIP音源 v1.2.0` 作为开箱测试音源
-  - 支持导入其他洛雪 JS 音源
+  - 音源脚本需由用户自行导入，不再内置默认音源
+  - 支持从本地 `.js` 文件或在线链接导入洛雪音源
   - 支持 `128k`、`320k`、`flac`、`flac24bit` 音质选择
   - 自动修正酷我封面 CDN 地址，兼容 Android HTTPS 网络环境
 - 播放体验
@@ -41,13 +41,16 @@ AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次
 
 ## 导入洛雪音源
 
-1. 打开应用搜索页。
-2. 点击顶部右侧的音源文件图标，或进入 **设置 → 洛雪音源**。
-3. 点击 **导入洛雪自定义音源**。
-4. 选择一个 `.js` 音源文件。
-5. 在同一页面分别选择播放音质与下载音质：低品质（128k）、标准（320k）、高品质（FLAC）或 Hi-Res（FLAC 24bit）。
+首次使用在线搜索前，需要先导入一个洛雪 JS 音源脚本：
 
-应用已经内置推荐音源，不导入也可以直接搜索歌曲并播放。用户导入的脚本只保存在本机应用数据中。
+1. 打开应用搜索页。
+2. 进入 **设置 → 洛雪音源**。
+3. 选择一种导入方式：
+   - **导入本地音源脚本**：选择一个 `.js` 音源文件。
+   - **从在线链接导入**：粘贴指向 `.js` 音源脚本的 `http/https` 链接并确认。
+4. 在同一页面分别选择播放音质与下载音质：低品质（128k）、标准（320k）、高品质（FLAC）或 Hi-Res（FLAC 24bit）。
+
+音源脚本只保存在本机应用数据中；未导入音源时，在线播放会提示前往设置导入。
 
 ## 搜索与播放
 
@@ -75,7 +78,7 @@ AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次
 
 - `source/lx/LxSearchClient.kt`：酷狗、网易云、QQ 音乐、酷我的搜索与封面元数据适配。
 - `source/lx/LxSourceRuntime.kt`：QuickJS 运行时、洛雪 API 和 HTTP Bridge。
-- `app/src/main/assets/script/default-lx-source.js`：内置测试音源。
+- `source/lx/LxSourceInstaller.kt`：本地/在线音源脚本导入与链接校验。
 - `app/src/main/assets/script/user-api-preload.js`：洛雪移动版 API 兼容层。
 - `MediaMetadata.sourceData`：保存音源所需的歌曲参数，不让平台字段渗透到 UI 和队列代码。
 
@@ -117,7 +120,6 @@ app/src/main/java/com/dd3boh/outertune/
   ui/screens/         Compose 页面
   db/                 Room 数据库和队列持久化
 app/src/main/assets/script/
-  default-lx-source.js
   user-api-preload.js
 media/                本地 Media3 定制模块
 ```
