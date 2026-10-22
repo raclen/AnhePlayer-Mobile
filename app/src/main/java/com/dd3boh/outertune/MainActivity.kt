@@ -172,7 +172,6 @@ import com.dd3boh.outertune.ui.screens.settings.SettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.StorageSettings
 import com.dd3boh.outertune.ui.theme.OuterTuneTheme
 import com.dd3boh.outertune.ui.utils.appBarScrollBehavior
-import com.dd3boh.outertune.utils.ActivityLauncherHelper
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.lmScannerCoroutine
 import com.dd3boh.outertune.utils.rememberEnumPreference
@@ -193,7 +192,6 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var downloadUtil: DownloadUtil
 
-    lateinit var activityLauncher: ActivityLauncherHelper
     lateinit var connectivityObserver: NetworkConnectivityObserver
 
     private var playerConnection by mutableStateOf<PlayerConnection?>(null)
@@ -256,8 +254,6 @@ class MainActivity : ComponentActivity() {
             playerConnection = PlayerConnection(controllerViewModel, database)
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        activityLauncher = ActivityLauncherHelper(this)
 
         setContent {
             Log.v(MAIN_TAG, "RC-1")

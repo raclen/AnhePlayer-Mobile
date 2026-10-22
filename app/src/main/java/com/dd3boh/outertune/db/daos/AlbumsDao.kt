@@ -171,51 +171,6 @@ interface AlbumsDao : ArtistsDao {
 
     @Query("SELECT * FROM album WHERE title = :name")
     fun albumsByName(name: String): AlbumEntity?
-
-    @Transaction
-    @Query(
-        """
-        SELECT song.*
-        FROM (SELECT n.songId      AS eid,
-                     SUM(playTime) AS oldPlayTime,
-                     newPlayTime
-              FROM event
-                       JOIN
-                   (SELECT songId, SUM(playTime) AS newPlayTime
-                    FROM event
-                    WHERE timestamp > (:now - 86400000 * 30 * 1)
-                    GROUP BY songId
-                    ORDER BY newPlayTime) as n
-                   ON event.songId = n.songId
-              WHERE timestamp < (:now - 86400000 * 30 * 1)
-              GROUP BY n.songId
-              ORDER BY oldPlayTime) AS t
-                 JOIN song on song.id = t.eid
-        WHERE 0.2 * t.oldPlayTime > t.newPlayTime
-        LIMIT 100
-    """
-    )
-    fun forgottenFavorites(now: Long = System.currentTimeMillis()): Flow<List<Song>>
-    @Transaction
-    @Query(
-        """
-        SELECT song.*
-        FROM event
-                 JOIN
-             song ON event.songId = song.id
-        WHERE event.timestamp > (:now - 86400000 * 7 * 2)
-        GROUP BY song.albumId
-        HAVING song.albumId IS NOT NULL
-        ORDER BY sum(event.playTime) DESC
-        LIMIT :limit
-        OFFSET :offset
-        """,
-    )
-    fun recommendedAlbum(
-        now: Long = System.currentTimeMillis(),
-        limit: Int = 5,
-        offset: Int = 0,
-    ): Flow<List<Song>>
     // endregion
 
     // region Inserts
@@ -263,9 +218,5 @@ interface AlbumsDao : ArtistsDao {
     // region Deletes
     @Delete
     fun delete(album: AlbumEntity)
-
-    @Transaction
-    @Query("DELETE FROM album WHERE isLocal = 1")
-    fun nukeLocalAlbums()
     // endregion
 }

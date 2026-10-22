@@ -124,9 +124,6 @@ interface QueueDao {
     @Delete
     fun delete(mq: QueueEntity)
 
-    @Query("DELETE FROM queue")
-    fun deleteAllQueues()
-
     @Query("DELETE FROM queue_song_map WHERE queueId = :id")
     fun deleteAllQueueSongs(id: Long)
 

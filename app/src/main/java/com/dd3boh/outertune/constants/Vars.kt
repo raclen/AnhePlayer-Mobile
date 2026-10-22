@@ -50,11 +50,7 @@ const val SNACKBAR_VERY_SHORT = 2000L
  */
 const val OOBE_VERSION = 5
 
-const val SCANNER_OWNER_DL = 32
 const val SCANNER_OWNER_LM = 1
-const val SCANNER_OWNER_M3U = 2
-
-const val SYNC_CD = 60000 * 30
 
 const val MAX_PLAYER_CONSECUTIVE_ERR = 3
 
@@ -70,13 +66,6 @@ val scannerWhitelistExts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 } else {
     listOf("opus", "dsf", "dff", "xm", "mod", "tta", "ape", "wv")
 }
-
-
-/**
- * Debug
- */
-// crash at first extractor scanner error. Currently not implemented
-const val SCANNER_CRASH_AT_FIRST_ERROR = false
 
 // true will not use multithreading for scanner
 const val SYNC_SCANNER = false

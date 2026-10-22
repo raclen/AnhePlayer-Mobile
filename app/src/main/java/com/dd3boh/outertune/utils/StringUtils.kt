@@ -145,23 +145,3 @@ fun numberToAlpha(l: Long): String {
         }
     }.joinToString("")
 }
-
-/**
- * Compare two version‐strings, returning:
- *   > 0 if v1 > v2
- *   < 0 if v1 < v2
- *   = 0 if they’re considered equal
- */
-fun compareVersion(v1: String, v2: String): Int {
-    fun normalize(v: String) = v.substringBefore('-')
-    val parts1 = normalize(v1).split('.').map { it.toIntOrNull() ?: 0 }
-    val parts2 = normalize(v2).split('.').map { it.toIntOrNull() ?: 0 }
-
-    val max = maxOf(parts1.size, parts2.size)
-    for (i in 0 until max) {
-        val n1 = parts1.getOrElse(i) { 0 }
-        val n2 = parts2.getOrElse(i) { 0 }
-        if (n1 != n2) return n1 - n2
-    }
-    return 0
-}

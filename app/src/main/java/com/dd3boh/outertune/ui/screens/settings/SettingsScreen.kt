@@ -37,8 +37,6 @@ import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
 
-val SETTINGS_TAG = "Settings"
-
 /**
  * 设置首页
  *

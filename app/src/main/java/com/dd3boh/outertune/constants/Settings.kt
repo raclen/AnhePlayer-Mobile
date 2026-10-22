@@ -84,18 +84,6 @@ enum class AudioQuality {
 
 /*
 ---------------------------
-Library & Content
----------------------------
- */
-
-
-enum class LikedAutodownloadMode {
-    OFF, ON, WIFI_ONLY
-}
-
-
-/*
----------------------------
 Misc preferences not bound
 to settings category
 ---------------------------
@@ -157,12 +145,5 @@ enum class SearchSource {
 }
 
 enum class Speed {
-    SLOW, MEDIUM, FAST;
-
-    fun toLrcRefreshMillis(): Long =
-        when (this) {
-            SLOW -> 125
-            MEDIUM -> 33
-            FAST -> 16
-        }
+    SLOW, MEDIUM, FAST
 }

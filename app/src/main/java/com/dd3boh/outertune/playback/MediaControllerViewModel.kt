@@ -8,10 +8,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import androidx.media3.common.Player
 import androidx.media3.common.util.Log
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaController
@@ -101,15 +99,6 @@ class MediaControllerViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
-    fun addRecreationalPlayerListener(lifecycle: Lifecycle, callback: (Player) -> Player.Listener) {
-        addControllerCallback(lifecycle) { controller, controllerLifecycle ->
-            controller.registerLifecycleCallback(
-                LifecycleIntersection(lifecycle, controllerLifecycle).lifecycle,
-                callback(controller)
-            )
-        }
-    }
-
     fun get(): MediaBrowser? {
         if (controllerFuture?.isDone == true && controllerFuture?.isCancelled == false) {
             return controllerFuture!!.get()
@@ -183,48 +172,4 @@ class MediaControllerViewModel(application: Application) : AndroidViewModel(appl
                 lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         }
     }
-
-    class LifecycleIntersection(
-        private val lifecycleOne: Lifecycle,
-        private val lifecycleTwo: Lifecycle
-    ) : LifecycleOwner, LifecycleEventObserver {
-        private val lifecycleRegistry = LifecycleRegistry(this)
-        override val lifecycle
-            get() = lifecycleRegistry
-
-        init {
-            lifecycleRegistry.addObserver(object : DefaultLifecycleObserver {
-                override fun onDestroy(owner: LifecycleOwner) {
-                    lifecycleOne.removeObserver(this@LifecycleIntersection)
-                    lifecycleTwo.removeObserver(this@LifecycleIntersection)
-                }
-            })
-            lifecycleOne.addObserver(this)
-            lifecycleTwo.addObserver(this)
-        }
-
-        override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-            if (lifecycleOne.currentState == Lifecycle.State.DESTROYED ||
-                lifecycleTwo.currentState == Lifecycle.State.DESTROYED
-            ) {
-                // you cannot set DESTROYED before setting CREATED
-                if (lifecycle.currentState == Lifecycle.State.INITIALIZED)
-                    lifecycleRegistry.currentState = Lifecycle.State.CREATED
-                lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
-                return
-            }
-            val target = lifecycleOne.currentState.coerceAtMost(lifecycleTwo.currentState)
-            if (target == lifecycleRegistry.currentState) return
-            lifecycleRegistry.currentState = target
-        }
-    }
-}
-
-fun Player.registerLifecycleCallback(lifecycle: Lifecycle, callback: Player.Listener) {
-    addListener(callback)
-    lifecycle.addObserver(object : DefaultLifecycleObserver {
-        override fun onDestroy(owner: LifecycleOwner) {
-            removeListener(callback)
-        }
-    })
 }

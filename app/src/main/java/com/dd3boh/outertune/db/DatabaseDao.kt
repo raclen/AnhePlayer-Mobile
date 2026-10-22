@@ -5,10 +5,8 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.room.Upsert
-import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.db.daos.AlbumsDao
 import com.dd3boh.outertune.db.daos.ArtistsDao
 import com.dd3boh.outertune.db.daos.PlaylistsDao
@@ -25,7 +23,6 @@ import com.dd3boh.outertune.db.entities.LyricsEntity
 import com.dd3boh.outertune.db.entities.QueueEntity
 import com.dd3boh.outertune.db.entities.QueueSongMap
 import com.dd3boh.outertune.db.entities.RecentActivityEntity
-import com.dd3boh.outertune.db.entities.RecentActivityType
 import com.dd3boh.outertune.db.entities.RelatedSongMap
 import com.dd3boh.outertune.db.entities.SearchHistory
 import com.dd3boh.outertune.db.entities.Song
@@ -33,7 +30,6 @@ import com.dd3boh.outertune.db.entities.SongAlbumMap
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.db.entities.SongGenreMap
-import com.dd3boh.outertune.extensions.toSQLiteQuery
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.models.toMediaMetadata
@@ -41,36 +37,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao {
-
-    @Transaction
-    @Query("""
-        SELECT song.*
-        FROM (SELECT *, COUNT(1) AS referredCount
-              FROM related_song_map
-              GROUP BY relatedSongId) map
-                 JOIN song ON song.id = map.relatedSongId
-        WHERE songId IN (SELECT songId
-                         FROM (SELECT songId
-                               FROM event
-                               ORDER BY ROWID DESC
-                               LIMIT 5)
-                         UNION
-                         SELECT songId
-                         FROM (SELECT songId
-                               FROM event
-                               WHERE timestamp > :now - 86400000 * 7
-                               GROUP BY songId
-                               ORDER BY SUM(playTime) DESC
-                               LIMIT 5)
-                         UNION
-                         SELECT id
-                         FROM (SELECT id
-                               FROM song
-                               LIMIT 10))
-        ORDER BY referredCount DESC
-        LIMIT 100
-    """)
-    fun quickPicks(now: Long = System.currentTimeMillis()): Flow<List<Song>>
 
     @Query("SELECT * FROM format WHERE id = :id")
     fun format(id: String?): Flow<FormatEntity?>
@@ -90,24 +56,6 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
 
     @Query("DELETE FROM search_history")
     fun clearSearchHistory()
-
-    @Query("SELECT COUNT(1) FROM related_song_map WHERE songId = :songId LIMIT 1")
-    fun hasRelatedSongs(songId: String): Boolean
-
-    @Transaction
-    @Query(
-        """
-        SELECT song.*
-        FROM (SELECT *
-              FROM related_song_map
-              GROUP BY relatedSongId) map
-                 JOIN
-             song
-             ON song.id = map.relatedSongId
-        WHERE songId = :songId
-        """
-    )
-    fun relatedSongs(songId: String): List<Song>
 
     @Query("""
         SELECT * FROM genre
@@ -283,12 +231,6 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
     @Delete
     fun delete(item: RecentActivityEntity)
 
-    @Query("DELETE FROM recent_activity")
-    fun clearRecentActivity()
-
-    @Query("SELECT * FROM recent_activity ORDER BY date DESC")
-    fun recentActivity(): Flow<List<RecentActivityEntity>>
-
     /**
      * Nukes
      */
@@ -296,37 +238,4 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
     @Transaction
     @Query("DELETE FROM genre WHERE isLocal = 1")
     fun nukeLocalGenre()
-
-    @Transaction
-    @Query("""
-DELETE FROM format 
-WHERE format.id IS NOT NULL 
-AND NOT EXISTS (
-    SELECT 1 FROM song WHERE song.id = format.id
-);
-    """)
-    fun nukeDanglingFormatEntities()
-
-    @Transaction
-    @Query("DELETE FROM lyrics WHERE lyrics.id IN (SELECT song.id FROM song WHERE song.isLocal)")
-    fun nukeLocalLyrics()
-
-    @Transaction
-    @Query("DELETE FROM lyrics WHERE lyrics.id NOT IN (SELECT song.id FROM song)")
-    fun nukeDanglingLyrics()
-
-    @Transaction
-    fun nukeLocalData() {
-        nukeLocalSongs()
-        nukeLocalArtists()
-        nukeLocalAlbums()
-        nukeLocalGenre()
-    }
-
-    @RawQuery
-    fun raw(supportSQLiteQuery: SupportSQLiteQuery): Int
-
-    fun checkpoint() {
-        raw("PRAGMA wal_checkpoint(FULL)".toSQLiteQuery())
-    }
 }

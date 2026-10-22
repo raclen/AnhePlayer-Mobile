@@ -68,27 +68,11 @@ interface ArtistsDao {
     """)
     fun searchArtists(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Artist>>
 
-    @Query("""
-        SELECT 
-            artist.*,
-            COUNT(song.id) AS songCount,
-            SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-        FROM artist
-            LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
-            LEFT JOIN song ON sam.songId = song.id
-        WHERE artist.name LIKE '%' || :query || '%' AND song.inLibrary IS NOT NULL AND song.isLocal
-        GROUP BY artist.id
-        HAVING songCount > 0
-        LIMIT :previewSize
-    """)
-    fun searchLocalArtists(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Artist>>
-
-
     @Transaction
     @Query("""
-        SELECT song.* 
-        FROM song_artist_map JOIN song ON song_artist_map.songId = song.id 
-        WHERE song_artist_map.artistId IN (SELECT id FROM artist WHERE name LIKE '%' || :query || '%') AND song.inLibrary IS NOT NULL 
+        SELECT song.*
+        FROM song_artist_map JOIN song ON song_artist_map.songId = song.id
+        WHERE song_artist_map.artistId IN (SELECT id FROM artist WHERE name LIKE '%' || :query || '%') AND song.inLibrary IS NOT NULL
         LIMIT :previewSize
     """)
     fun searchArtistSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
@@ -101,15 +85,6 @@ interface ArtistsDao {
         LIMIT :previewSize
     """)
     fun searchLocalArtistSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
-
-    @Query("SELECT * FROM artist WHERE name LIKE '%' || :query || '%' LIMIT :previewSize")
-    fun artistsByNameFuzzy(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<ArtistEntity>>
-
-    @Query("SELECT * FROM artist WHERE isLocal != 1")
-    fun allRemoteArtists(): Flow<List<ArtistEntity>>
-
-    @Query("SELECT * FROM artist WHERE isLocal = 1")
-    fun allLocalArtists(): List<ArtistEntity>
 
     @Query("""
         SELECT 
@@ -180,7 +155,6 @@ interface ArtistsDao {
 
     fun artistsInLibraryAsc() = artists(ArtistFilter.LIBRARY, ArtistSortType.CREATE_DATE, false)
     fun artistsBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false)
-    fun artistsLocalBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false, true)
 
     @Transaction
     @Query("""
@@ -246,9 +220,5 @@ interface ArtistsDao {
         AND id = :artistId
     """)
     fun safeDeleteArtist(artistId: String)
-
-    @Transaction
-    @Query("DELETE FROM artist WHERE isLocal = 1")
-    fun nukeLocalArtists()
     // endregion
 }

@@ -1,13 +1,7 @@
 package org.akanework.gramophone.logic.utils
 
 import androidx.annotation.VisibleForTesting
-import androidx.media3.common.Metadata
 import androidx.media3.common.util.Log
-import androidx.media3.common.util.ParsableByteArray
-import androidx.media3.extractor.metadata.id3.BinaryFrame
-import androidx.media3.extractor.metadata.id3.TextInformationFrame
-import androidx.media3.extractor.metadata.vorbis.VorbisComment
-import org.akanework.gramophone.logic.utils.SemanticLyrics.SyncedLyrics
 import java.io.File
 import java.nio.charset.Charset
 
@@ -48,51 +42,6 @@ object LrcUtils {
             }
         }
         return null
-    }
-
-    // returns best lyrics first
-    fun extractAndParseLyrics(
-        sampleRate: Int,
-        audioMimeType: String?,
-        metadata: Metadata,
-        parserOptions: LrcParserOptions
-    ): List<SemanticLyrics> {
-        val out = mutableListOf<SemanticLyrics>()
-        for (i in 0..<metadata.length()) {
-            val meta = metadata.get(i)
-            if (meta is BinaryFrame && meta.id == "SYLT") {
-                val syltData = UsltFrameDecoder.decodeSylt(sampleRate, ParsableByteArray(meta.data))
-                if (syltData != null) {
-                    if (syltData.contentType == 1 || syltData.contentType == 2) {
-                        out.add(syltData.toSyncedLyrics(parserOptions.trim))
-                    }
-                    continue
-                }
-            }
-            val plainTextData =
-                if (meta is VorbisComment && meta.key == "LYRICS") // ogg / flac
-                    meta.value
-                else if (meta is BinaryFrame && (meta.id == "USLT" || meta.id == "SYLT" /* out-of-spec */)) // mp3 / other id3 based
-                    UsltFrameDecoder.decode(ParsableByteArray(meta.data))?.text
-                else if (meta is TextInformationFrame && (meta.id == "USLT" || meta.id == "SYLT")) // m4a
-                    meta.values.joinToString("\n")
-                else null
-            if (plainTextData != null) {
-                parseLyrics(plainTextData, audioMimeType, parserOptions, null)?.let {
-                    out.add(it)
-                    continue
-                }
-            }
-        }
-        out.sortBy {
-            if (it !is SyncedLyrics) {
-                return@sortBy -10
-            }
-            val hasWords = it.text.find { it.words != null } != null
-            val hasTl = it.text.find { it.isTranslated } != null
-            if (hasWords) 10 else 0 + if (hasTl) 1 else 0
-        }
-        return out
     }
 
     fun loadAndParseLyricsFile(musicFile: File?, audioMimeType: String?, parserOptions: LrcParserOptions): SemanticLyrics? {

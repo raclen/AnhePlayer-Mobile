@@ -3,7 +3,6 @@ package com.dd3boh.outertune.ui.utils
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,18 +49,6 @@ class AppBarScrollBehavior constructor(
             }
             state.heightOffset += consumed.y
             return Offset.Zero
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-suspend fun TopAppBarState.resetHeightOffset() {
-    if (heightOffset != 0f) {
-        animate(
-            initialValue = heightOffset,
-            targetValue = 0f
-        ) { value, _ ->
-            heightOffset = value
         }
     }
 }

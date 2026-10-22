@@ -213,29 +213,6 @@ fun QueueSheet(
     }
 }
 
-@Composable
-fun QueueScreen(
-    onTerminate: () -> Unit,
-    playerBottomSheetState: BottomSheetState,
-    navController: NavController,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .windowInsetsPadding(
-                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom)
-                    .add(WindowInsets(bottom = MiniPlayerHeight))
-            )
-    ) {
-        QueueContent(
-            onTerminate = onTerminate,
-            playerState = playerBottomSheetState,
-            navController = navController
-        )
-    }
-}
-
 @OptIn(FlowPreview::class)
 @Composable
 fun BoxScope.QueueContent(

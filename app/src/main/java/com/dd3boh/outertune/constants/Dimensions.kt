@@ -30,7 +30,6 @@ val AppBarHeight = 64.dp
 
 val ListItemHeight = 64.dp
 val SuggestionItemHeight = 56.dp
-val SearchFilterHeight = 48.dp
 val ListThumbnailSize = 48.dp
 val GridThumbnailHeight = 96.dp
 val AlbumThumbnailSize = 144.dp
@@ -69,20 +68,10 @@ val InsetsSafeSTE: WindowInsets
     get() =
         WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.End)
 
-val InsetsSafeSTB: WindowInsets
-    @Composable
-    get() =
-        WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom)
-
 val InsetsSafeT: WindowInsets
     @Composable
     get() =
         WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
-
-val InsetsSafeTEB: WindowInsets
-    @Composable
-    get() =
-        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom)
 
 val NavigationBarAnimationSpec = spring<Dp>(stiffness = Spring.StiffnessMediumLow)
 val BottomSheetAnimationSpec = spring<Dp>(stiffness = Spring.StiffnessMediumLow)

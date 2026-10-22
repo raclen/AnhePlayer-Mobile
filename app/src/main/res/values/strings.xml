@@ -198,7 +198,6 @@
     <string name="pause_search_history">暂停搜索历史</string>
     <string name="clear_search_history">清除搜索历史</string>
     <string name="clear_search_history_confirm">是否确定要清除所有搜索历史？</string>
-    <string name="enable_kugou">使用酷狗音乐提供歌词</string>
     <string name="imported_playlist">已导入的播放列表</string>
     <string name="about">关于</string>
     <string name="app_version">应用版本</string>

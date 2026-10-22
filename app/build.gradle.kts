@@ -268,7 +268,6 @@ dependencies {
     implementation(libs.ktor.serialization.json)
 
     // modules
-    implementation(project(":kugou"))
     implementation(project(":lrclib"))
     implementation(project(":material-color-utilities"))
     implementation(project(":taglib"))

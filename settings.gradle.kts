@@ -11,7 +11,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "AnhePlayer-Mobile"
 include(":app")
-include(":kugou")
 include(":lrclib")
 include(":material-color-utilities")
 include(":ffMetadataEx")

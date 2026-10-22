@@ -1486,4 +1486,3 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
 
 class InvalidAudioFileException(message: String) : Throwable(message)
 class ScannerAbortException(message: String) : Throwable(message)
-class ScannerCriticalFailureException(message: String) : Throwable(message)

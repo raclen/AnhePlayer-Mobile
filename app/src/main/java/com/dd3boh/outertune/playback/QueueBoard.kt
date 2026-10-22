@@ -676,12 +676,6 @@ class QueueBoard(
      */
     fun getAllQueues() = masterQueues.toImmutableList()
 
-
-    /**
-     * Get the index of the current queue
-     */
-    fun getMasterIndex() = masterIndex
-
     /**
      * Retrieve the current queue
      *

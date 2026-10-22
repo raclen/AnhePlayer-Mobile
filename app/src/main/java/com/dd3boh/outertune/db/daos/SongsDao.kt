@@ -74,21 +74,10 @@ interface SongsDao {
     @Query("SELECT sum(count) from playCount WHERE song = :songId")
     fun getLifetimePlayCount(songId: String?): Int
 
-    @Query("SELECT sum(count) from playCount WHERE song = :songId AND year = :year")
-    fun getPlayCountByYear(songId: String?, year: Int): Flow<Int>
-
     @Query("SELECT count from playCount WHERE song = :songId AND year = :year AND month = :month")
     fun getPlayCountByMonth(songId: String?, year: Int, month: Int): Flow<Int>
 
-    @Transaction
-    @Query("SELECT * FROM song WHERE liked AND dateDownload IS NULL")
-    fun likedSongsNotDownloaded(): Flow<List<Song>>
-
     // region Songs Sort
-    @Transaction
-    @Query("SELECT * FROM song WHERE inLibrary IS NOT NULL ORDER BY rowId")
-    fun songsByRowIdAsc(): Flow<List<Song>>
-
     @Transaction
     @Query("SELECT * FROM song WHERE inLibrary IS NOT NULL ORDER BY inLibrary")
     fun songsByCreateDateAsc(): Flow<List<Song>>
@@ -152,13 +141,6 @@ interface SongsDao {
     @Query("SELECT * FROM song WHERE isLocal = 1")
     fun allLocalDbSongs(): List<Song>
 
-    @Transaction
-    @Query("""
-        SELECT * FROM song
-        WHERE isLocal = 1 AND localpath LIKE :filter || '%'
-    """)
-    fun localDbSongsInDir(filter: String): Flow<List<Song>>
-
     /**
      * Does not include unavailable songs
      */
@@ -206,10 +188,6 @@ interface SongsDao {
     // region Liked Songs Sort
     @Query("SELECT COUNT(1) FROM song WHERE liked")
     fun likedSongsCount(): Flow<Int>
-
-    @Transaction
-    @Query("SELECT * FROM song WHERE liked ORDER BY rowId")
-    fun likedSongsByRowIdAsc(): Flow<List<Song>>
 
     @Transaction
     @Query("SELECT * FROM song WHERE liked ORDER BY likedDate")
@@ -265,20 +243,8 @@ interface SongsDao {
 
     // region downloaded Songs utils
     @Transaction
-    @Query("SELECT * FROM song WHERE isLocal = 0 AND dateDownload IS NOT NULL AND dateDownload IS NOT 0")
-    fun downloadedSongs(): Flow<List<Song>>
-
-    @Transaction
-    @Query("SELECT * FROM song WHERE isLocal = 0 AND dateDownload = 0")
-    fun downloadQueuedSongs(): Flow<List<Song>>
-
-    @Transaction
     @Query("SELECT * FROM song WHERE isLocal = 0 AND dateDownload IS NOT NULL")
     fun downloadedOrQueuedSongs(): Flow<List<Song>>
-
-    @Transaction
-    @Query("SELECT * FROM song WHERE isLocal = 0 AND dateDownload IS NULL AND localPath IS NULL")
-    fun downloadRelinkableSongs(): Flow<List<Song>>
 
     @Query("UPDATE song SET dateDownload = :dateDownload WHERE id = :songId")
     fun updateDownloadStatus(songId: String, dateDownload: LocalDateTime?)
@@ -422,9 +388,5 @@ interface SongsDao {
     // region Deletes
     @Delete
     fun delete(song: SongEntity)
-
-    @Transaction
-    @Query("DELETE FROM song WHERE isLocal = 1")
-    fun nukeLocalSongs()
     // endregion
 }

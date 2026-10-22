@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
-import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scanDfRecursive
 import com.dd3boh.outertune.utils.scanners.documentFileFromUri
 import java.io.IOException
@@ -143,13 +142,6 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
         return isExists(mediaId)?.uri
     }
 
-    fun getMissingFiles(mediaId: List<Song>): List<Song> {
-        val missingFiles = mediaId.toMutableSet()
-        val result = getAvailableFiles(false)
-        missingFiles.removeIf { f -> result.any { it.key == f.id } }
-        return missingFiles.toList()
-    }
-
     fun getAvailableFiles() = getAvailableFiles(true)
 
     fun getAvailableFiles(useCache: Boolean = true): Map<String, Uri> {
@@ -188,14 +180,6 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
         scanDfRecursive(mainDir!!, result, true)
 
         return result.filter { it.name != null }.sumOf { it.length() }
-    }
-
-    fun getTotalDlStorageUsage(): Long {
-        if (allDirs.isEmpty()) return 0
-        val result = ArrayList<DocumentFile>()
-        availableFiles.sumOf { it.length() }
-
-        return availableFiles.sumOf { it.length() }
     }
 
     fun getExtraDlStorageUsage(): Long {

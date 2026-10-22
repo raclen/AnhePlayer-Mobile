@@ -10,15 +10,9 @@ package com.dd3boh.outertune.models
 
 import android.util.Log
 import androidx.compose.ui.util.fastFirstOrNull
-import androidx.compose.ui.util.fastSumBy
-import com.dd3boh.outertune.constants.FolderSongSortType
 import com.dd3boh.outertune.constants.SCANNER_DEBUG
-import com.dd3boh.outertune.constants.SongSortType
 import com.dd3boh.outertune.db.entities.Song
-import com.dd3boh.outertune.ui.utils.uninitializedDirectoryTree
 import com.dd3boh.outertune.utils.fixFilePath
-import com.dd3boh.outertune.utils.numberToAlpha
-import java.time.ZoneOffset
 
 /**
  * A tree representation of local audio files
@@ -173,63 +167,6 @@ class DirectoryTree(path: String, var culmSongs: CulmSongs) {
     }
 
     /**
-     * Retrieve a list of all the songs in the current directory, adhering to sort preferences.
-     */
-    fun toSortedList(sortType: FolderSongSortType, sortDescending: Boolean): List<Song> {
-        val songs = files.toMutableList()
-
-        // sort songs. Ignore any subfolder structure
-        songs.sortBy {
-            when (sortType) {
-                FolderSongSortType.CREATE_DATE -> numberToAlpha(it.song.inLibrary?.toEpochSecond(ZoneOffset.UTC) ?: -1L)
-                FolderSongSortType.MODIFIED_DATE -> numberToAlpha(it.song.getDateModifiedLong() ?: -1L)
-                FolderSongSortType.RELEASE_DATE -> numberToAlpha(it.song.getDateLong() ?: -1L)
-                FolderSongSortType.NAME -> it.song.title.lowercase()
-                FolderSongSortType.ARTIST -> it.artists.joinToString { artist -> artist.name }.lowercase()
-                FolderSongSortType.PLAY_COUNT -> numberToAlpha((it.playCount?.fastSumBy { it.count })?.toLong() ?: 0L)
-                FolderSongSortType.TRACK_NUMBER -> numberToAlpha(it.song.trackNumber?.toLong() ?: Long.MAX_VALUE)
-            }
-        }
-
-        if (sortDescending) {
-            songs.reverse()
-        }
-        return songs
-    }
-
-    /**
-     * Retrieve a list of all the songs in the current directory including subdirectories, adhering to sort preferences.
-     * Subfolder structure will be completely ignored.
-     */
-    fun toSortedListRecursive(sortType: SongSortType, sortDescending: Boolean): List<Song> {
-        val songs = ArrayList<Song>()
-
-        fun traverseTree(tree: DirectoryTree, result: ArrayList<Song>) {
-            result.addAll(tree.files)
-            tree.subdirs.forEach { traverseTree(it, result) }
-        }
-
-        traverseTree(this, songs)
-
-        // sort songs. Ignore any subfolder structure
-        songs.sortBy {
-            when (sortType) {
-                SongSortType.CREATE_DATE -> it.song.inLibrary?.toEpochSecond(ZoneOffset.UTC).toString()
-                SongSortType.MODIFIED_DATE -> it.song.getDateModifiedLong().toString()
-                SongSortType.RELEASE_DATE -> it.song.getDateLong().toString()
-                SongSortType.NAME -> it.song.title
-                SongSortType.ARTIST -> it.artists.firstOrNull()?.name
-                SongSortType.PLAY_COUNT -> it.playCount.toString()
-            }
-        }
-
-        if (sortDescending) {
-            songs.reverse()
-        }
-        return songs
-    }
-
-    /**
      * Retrieves a modified version of this DirectoryTree.
      * All folders are recognized to be top level folders
      */
@@ -237,12 +174,6 @@ class DirectoryTree(path: String, var culmSongs: CulmSongs) {
         val result = ArrayList<DirectoryTree>()
         getSubdirsRecursive(this, result, includeEmpty = includeEmpty)
         return result
-    }
-
-    fun getSubDir(path: String): DirectoryTree {
-        val result = ArrayList<DirectoryTree>()
-        getSubdirsRecursive(this, result, includeEmpty = true)
-        return result.firstOrNull { fixFilePath(it.getFullPath()) == fixFilePath(path) } ?: uninitializedDirectoryTree
     }
 
     /**
@@ -261,23 +192,6 @@ class DirectoryTree(path: String, var culmSongs: CulmSongs) {
         if (currentDir == "/" && subdirs.size == 1 && files.isEmpty()) {
             return DirectoryTree("/storage", culmSongs, subdirs.first().subdirs, subdirs.first().files)
         }
-
-        return this
-    }
-
-    /**
-     * Remove any single empty branches of the tree, aka. DirectoryTrees with no files,
-     * but only one subdirectory.
-     */
-    fun trimRoot(): DirectoryTree {
-        var pointer = this
-        while (pointer.subdirs.size == 1 && pointer.files.isEmpty()) {
-            pointer = pointer.subdirs[0]
-        }
-
-        this.currentDir = pointer.currentDir
-        this.files = pointer.files
-        this.subdirs = pointer.subdirs
 
         return this
     }

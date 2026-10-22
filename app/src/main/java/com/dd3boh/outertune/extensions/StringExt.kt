@@ -1,8 +1,6 @@
 package com.dd3boh.outertune.extensions
 
 import androidx.sqlite.db.SimpleSQLiteQuery
-import java.net.InetSocketAddress
-import java.net.InetSocketAddress.createUnresolved
 
 inline fun <reified T : Enum<T>> String?.toEnum(defaultValue: T): T =
     if (this == null) defaultValue
@@ -13,8 +11,3 @@ inline fun <reified T : Enum<T>> String?.toEnum(defaultValue: T): T =
     }
 
 fun String.toSQLiteQuery(): SimpleSQLiteQuery = SimpleSQLiteQuery(this)
-
-fun String.toInetSocketAddress(): InetSocketAddress {
-    val (host, port) = split(":")
-    return createUnresolved(host, port.toInt())
-}
