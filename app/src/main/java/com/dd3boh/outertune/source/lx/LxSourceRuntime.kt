@@ -19,7 +19,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -28,9 +32,12 @@ import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.FormBody
+import okhttp3.MediaType
+import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
@@ -50,6 +57,8 @@ object LxSourceRuntime {
     private const val TAG = "LxSourceRuntime"
     private const val DEFAULT_QUALITY = "320k"
     private const val EXTRA_REQUEST_TIMEOUT_MS = 15_000L
+    private const val DEFAULT_USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     private lateinit var appContext: Context
     private val httpClient = OkHttpClient()
@@ -254,21 +263,19 @@ object LxSourceRuntime {
         val requestKey = data["requestKey"]?.jsonPrimitive?.contentOrNull ?: return
         val url = data["url"]?.jsonPrimitive?.contentOrNull ?: return
         val options = data["options"]?.jsonObject ?: JsonObject(emptyMap())
-        val method = options["method"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "GET"
-        val headers = options["headers"] as? JsonObject
-        val bodyData = options["data"]
-        val builder = Request.Builder().url(url)
-        headers?.forEach { (name, value) -> value.jsonPrimitive.contentOrNull?.let { builder.addHeader(name, it) } }
-        val requestBody = when {
-            method == "GET" || method == "HEAD" -> null
-            bodyData is JsonObject -> FormBody.Builder().apply {
-                bodyData.forEach { (key, value) -> add(key, value.jsonPrimitive.contentOrNull.orEmpty()) }
-            }.build()
-            bodyData != null -> bodyData.toString().toRequestBody("application/json".toMediaTypeOrNull())
-            else -> ByteArray(0).toRequestBody(null)
+        val request = try {
+            buildScriptHttpRequest(url, options)
+        } catch (error: Exception) {
+            respondHttp(requestKey, error.message ?: "构造请求失败", null)
+            return
         }
-        builder.method(method, requestBody)
-        httpClient.newCall(builder.build()).enqueue(object : Callback {
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "音源 HTTP ${request.method} body=${request.body?.contentLength() ?: 0} type=${request.body?.contentType()}",
+            )
+        }
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = respondHttp(requestKey, e.message ?: "网络请求失败", null)
             override fun onResponse(call: Call, response: Response) {
                 response.use {
@@ -282,6 +289,84 @@ object LxSourceRuntime {
                 }
             }
         })
+    }
+
+    /**
+     * 把 lx.request 的 options 转成 OkHttp 请求。
+     *
+     * JS 桥接字段是 body / form / formData；保留 data 作为旧脚本兼容字段。对象 body 按 JSON 发送；
+     * 字符串 body 取原始内容，避免 toString() 再包一层引号。
+     */
+    internal fun buildScriptHttpRequest(url: String, options: JsonObject): Request {
+        val method = options["method"]?.jsonPrimitive?.contentOrNull?.uppercase() ?: "GET"
+        val headers = options["headers"] as? JsonObject
+        val form = options["form"] as? JsonObject
+        val formData = options["formData"] as? JsonObject
+        val body = options["body"] ?: options["data"]
+        val builder = Request.Builder().url(url)
+        var hasUserAgent = false
+        headers?.forEach { (name, value) ->
+            if (form == null && formData != null && name.equals("Content-Type", ignoreCase = true)) {
+                return@forEach
+            }
+            val headerValue = (value as? JsonPrimitive)?.contentOrNull ?: return@forEach
+            if (name.equals("User-Agent", ignoreCase = true)) hasUserAgent = true
+            builder.addHeader(name, headerValue)
+        }
+        if (!hasUserAgent) builder.addHeader("User-Agent", DEFAULT_USER_AGENT)
+        builder.method(method, scriptRequestBody(method, headers, form, formData, body))
+        return builder.build()
+    }
+
+    private fun scriptRequestBody(
+        method: String,
+        headers: JsonObject?,
+        form: JsonObject?,
+        formData: JsonObject?,
+        body: JsonElement?,
+    ): RequestBody? {
+        if (method == "GET" || method == "HEAD") return null
+        if (form != null) {
+            return FormBody.Builder().apply {
+                form.forEach { (key, value) -> add(key, scriptFormValue(value)) }
+            }.build()
+        }
+        if (formData != null) {
+            return MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .apply {
+                    formData.forEach { (key, value) ->
+                        addFormDataPart(key, scriptFormValue(value))
+                    }
+                }
+                .build()
+        }
+        return when (body) {
+            null -> ByteArray(0).toRequestBody(null)
+            is JsonObject, is JsonArray -> body.toString().toRequestBody(scriptContentType(headers, true))
+            is JsonPrimitive -> body.contentOrNull?.toRequestBody(
+                scriptContentType(headers, defaultJson = !body.isString),
+            ) ?: ByteArray(0).toRequestBody(null)
+        }
+    }
+
+    private fun scriptFormValue(value: JsonElement): String = when {
+        value is JsonNull -> ""
+        value is JsonPrimitive -> value.content
+        else -> value.toString()
+    }
+
+    /** 脚本显式给了 Content-Type 就沿用；对象、数组和标量默认按 JSON，字符串默认按纯文本。 */
+    private fun scriptContentType(headers: JsonObject?, defaultJson: Boolean = true): MediaType? {
+        val raw = headers?.entries
+            ?.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+            ?.let { (it.value as? JsonPrimitive)?.contentOrNull }
+        val fallback = if (defaultJson) {
+            "application/json; charset=utf-8"
+        } else {
+            "text/plain; charset=utf-8"
+        }
+        return (raw ?: fallback).toMediaTypeOrNull()
     }
 
     private fun respondHttp(requestKey: String, error: String?, response: JsonObject?) {

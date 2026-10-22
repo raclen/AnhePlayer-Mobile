@@ -1,3 +1,10 @@
+# AnhePlayer v2.0.6
+
+## 音源
+
+- 修复洛雪音源脚本的 `formData` 请求选项未生效的问题，正确发送 multipart 表单字段。
+- 修复未显式指定 `Content-Type` 时原始字符串请求体被错误标记为 JSON 的问题。
+
 # AnhePlayer v2.0.5
 
 ## 版本更新
