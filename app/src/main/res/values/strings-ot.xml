@@ -191,7 +191,7 @@
     <string name="app_update_later">稍后</string>
     <string name="app_update_checking">正在检查…</string>
     <string name="app_update_no_new_version">未发现新版本</string>
-    <string name="app_update_notes_empty">前往 GitHub 查看更新内容和下载 APK。</string>
+    <string name="app_update_notes_empty">前往官网查看更新内容和下载 APK。</string>
     <string name="app_update_auto_hint">后台静默检查，每个新版本只提醒一次。</string>
     <string name="app_update_prompt_hint">本版本只提醒这一次，之后可在「关于」查看更新。</string>
     <string name="app_update_last_checked">上次成功检查：%1$s</string>

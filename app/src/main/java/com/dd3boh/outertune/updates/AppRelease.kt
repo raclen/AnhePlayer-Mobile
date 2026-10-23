@@ -13,6 +13,9 @@ import kotlinx.serialization.json.put
 const val APP_PROJECT_URL = "https://github.com/raclen/AnhePlayer-Mobile"
 internal const val APP_RELEASES_API = "https://api.github.com/repos/raclen/AnhePlayer-Mobile/releases?per_page=30"
 
+/** 面向用户的下载入口；更新检查仍走 GitHub API，但点击下载统一跳官网，避免直接暴露仓库。 */
+const val APP_DOWNLOAD_URL = "https://anhe-player.loc.cc/mobile"
+
 data class AppRelease(
     val version: String,
     val versionCode: Long,

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.updates.APP_DOWNLOAD_URL
 import com.dd3boh.outertune.updates.AppUpdateCheckResult
 import com.dd3boh.outertune.viewmodels.AppUpdateViewModel
 import kotlinx.coroutines.launch
@@ -102,7 +103,7 @@ fun AppUpdateCard(
                 if (release != null) {
                     Button(onClick = {
                         try {
-                            uriHandler.openUri(release.releaseUrl)
+                            uriHandler.openUri(APP_DOWNLOAD_URL)
                         } catch (_: Exception) {
                             Toast.makeText(context, R.string.app_update_open_failed, Toast.LENGTH_SHORT).show()
                         }
