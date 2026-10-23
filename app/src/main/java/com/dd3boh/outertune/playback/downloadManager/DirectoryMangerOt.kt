@@ -14,7 +14,7 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     var mainDir: DocumentFile? = null
     var allDirs: List<DocumentFile> = mutableListOf()
 
-    /** 未设置自定义目录时使用内置默认目录 Music/OuterTune（MediaStore，免授权） */
+    /** 未设置自定义目录时写入 Music/AnhePlayer，兼容读取 Music/OuterTune（MediaStore，免授权） */
     private var builtinDir: MediaStoreDownloadDir? = null
 
     var availableFiles: Set<DocumentFile> = mutableSetOf()

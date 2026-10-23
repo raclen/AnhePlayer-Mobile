@@ -61,8 +61,8 @@ import androidx.navigation.NavController
 import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.MainActivity
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.withLocalMediaScanner
 import com.dd3boh.outertune.constants.ExcludedScanPathsKey
-import com.dd3boh.outertune.constants.SCANNER_OWNER_LM
 import com.dd3boh.outertune.constants.ScannerImpl
 import com.dd3boh.outertune.constants.ScannerMatchCriteria
 import com.dd3boh.outertune.constants.TopBarInsets
@@ -71,14 +71,12 @@ import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.ui.utils.backToMain
-import com.dd3boh.outertune.ui.utils.clearDtCache
 import com.dd3boh.outertune.utils.rememberPreference
-import com.dd3boh.outertune.utils.scanners.LocalMediaScanner
-import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.destroyScanner
 import com.dd3boh.outertune.utils.scanners.MusicFolderDiscovery
 import com.dd3boh.outertune.utils.scanners.MusicFolderInfo
 import com.dd3boh.outertune.utils.scanners.stringFromUriList
 import com.dd3boh.outertune.utils.scanners.uriListFromString
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -112,21 +110,21 @@ fun LocalFoldersSettings(
     fun syncLibrary(excludedStr: String) {
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                val scanner = LocalMediaScanner.getScanner(context, ScannerImpl.MEDIASTORE, SCANNER_OWNER_LM)
-                scanner.fullMediaStoreSync(
-                    database = database,
-                    scanPaths = emptyList(),
-                    excludedScanPaths = uriListFromString(excludedStr),
-                    matchCriteria = ScannerMatchCriteria.LEVEL_2,
-                    strictFileNames = false,
-                    strictFilePaths = false,
-                    refreshExisting = false
-                )
+                withLocalMediaScanner(context, ScannerImpl.MEDIASTORE) { scanner ->
+                    scanner.fullMediaStoreSync(
+                        database = database,
+                        scanPaths = emptyList(),
+                        excludedScanPaths = uriListFromString(excludedStr),
+                        matchCriteria = ScannerMatchCriteria.LEVEL_2,
+                        strictFileNames = false,
+                        strictFilePaths = false,
+                        refreshExisting = false,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w("LocalFoldersSettings", "Library sync failed: ${e.message}")
-            } finally {
-                clearDtCache()
-                destroyScanner(SCANNER_OWNER_LM)
             }
         }
     }

@@ -12,6 +12,7 @@ package com.dd3boh.outertune
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -171,6 +172,7 @@ import com.dd3boh.outertune.ui.screens.settings.LxSourceSettings
 import com.dd3boh.outertune.ui.screens.settings.SettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.StorageSettings
 import com.dd3boh.outertune.ui.theme.OuterTuneTheme
+import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.ui.utils.appBarScrollBehavior
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.lmScannerCoroutine
@@ -179,7 +181,9 @@ import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.AppUpdateViewModel
 import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -200,10 +204,31 @@ class MainActivity : ComponentActivity() {
     private val appUpdateViewModel: AppUpdateViewModel by viewModels()
     private var isActivityResumed by mutableStateOf(false)
     private var hasActivityWindowFocus by mutableStateOf(false)
+    private var startupScanComplete by mutableStateOf(false)
+    private var waitingForAudioPermission by mutableStateOf(false)
+    private var lastObservedAudioPermission: Boolean? = null
+    private var permissionRequestInFlight = false
+    private var permissionScanPending = false
+    private var audioPermissionDenied = false
+    private var permissionScanGeneration = 0L
+    private val audioPermissionResults = Channel<Boolean>(Channel.CONFLATED)
+
+    private fun observeAudioPermission(granted: Boolean) {
+        val previous = lastObservedAudioPermission
+        lastObservedAudioPermission = granted
+        if (granted && previous == false) {
+            permissionScanGeneration++
+            permissionScanPending = true
+            audioPermissionDenied = false
+            startupScanComplete = false
+            audioPermissionResults.trySend(true)
+        }
+    }
 
     override fun onResume() {
         super.onResume()
         isActivityResumed = true
+        observeAudioPermission(checkSelfPermission(MEDIA_PERMISSION_LEVEL) == PackageManager.PERMISSION_GRANTED)
         appUpdateViewModel.checkAutomatically()
     }
 
@@ -220,12 +245,20 @@ class MainActivity : ComponentActivity() {
     // storage permission helpers
     val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-//                Toast.makeText(this, "Granted", Toast.LENGTH_SHORT).show()
-            } else {
+            permissionRequestInFlight = false
+            observeAudioPermission(isGranted)
+            if (!isGranted) {
+                audioPermissionDenied = true
+                audioPermissionResults.trySend(false)
                 Toast.makeText(this, getString(R.string.scanner_missing_storage_perm), Toast.LENGTH_SHORT).show()
             }
         }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("pendingPermissionScan", permissionScanPending)
+        outState.putBoolean("permissionRequestInFlight", permissionRequestInFlight)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onDestroy() {
         Log.i(MAIN_TAG, "onDestroy() called. isFinishing = $isFinishing")
@@ -249,6 +282,11 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lastObservedAudioPermission = checkSelfPermission(MEDIA_PERMISSION_LEVEL) == PackageManager.PERMISSION_GRANTED
+        permissionScanPending = savedInstanceState?.getBoolean("pendingPermissionScan") == true &&
+            lastObservedAudioPermission == true
+        permissionRequestInFlight = savedInstanceState?.getBoolean("permissionRequestInFlight") == true
+        if (permissionScanPending) audioPermissionResults.trySend(true)
         lifecycle.addObserver(controllerViewModel)
         controllerViewModel.addControllerCallback(lifecycle) { controller, _ ->
             playerConnection = PlayerConnection(controllerViewModel, database)
@@ -261,7 +299,6 @@ class MainActivity : ComponentActivity() {
             val haptic = LocalHapticFeedback.current
             val snackbarHostState = remember { SnackbarHostState() }
             val appUpdateState by appUpdateViewModel.state.collectAsState()
-            var startupScanComplete by remember { mutableStateOf(false) }
 
             val enableDynamicTheme by rememberPreference(DynamicThemeKey, defaultValue = true)
             val darkTheme by rememberEnumPreference(DarkModeKey, defaultValue = DarkMode.AUTO)
@@ -296,15 +333,43 @@ class MainActivity : ComponentActivity() {
 
 
             LaunchedEffect(Unit) {
-                // local media & download folders auto scan
-                coroutineScope.launch(lmScannerCoroutine) {
-                    try {
+                var handledPermissionGeneration = -1L
+
+                suspend fun runScan(trigger: ScanTrigger) {
+                    startupScanComplete = false
+                    val result = withContext(lmScannerCoroutine) {
                         scanInit(
                             this@MainActivity, database, downloadUtil, coroutineScope, playerConnection,
-                            snackbarHostState
+                            snackbarHostState, trigger,
                         )
-                    } finally {
+                    }
+                    if (result.localScanAttempted || trigger == ScanTrigger.AUDIO_PERMISSION_GRANTED) {
+                        // 启动已实际扫描时，合并下载扫描期间到达的授权事件。
+                        handledPermissionGeneration = permissionScanGeneration
+                        permissionScanPending = false
+                    }
+                    waitingForAudioPermission = result.status == ScanStatus.WAITING_PERMISSION && !audioPermissionDenied
+                    startupScanComplete = !waitingForAudioPermission && !permissionScanPending
+                    if (waitingForAudioPermission) {
+                        observeAudioPermission(
+                            checkSelfPermission(MEDIA_PERMISSION_LEVEL) == PackageManager.PERMISSION_GRANTED,
+                        )
+                        if (!permissionScanPending && !permissionRequestInFlight) {
+                            permissionRequestInFlight = true
+                            permissionLauncher.launch(MEDIA_PERMISSION_LEVEL)
+                        }
+                    }
+                }
+
+                // local media & download folders auto scan
+                runScan(ScanTrigger.STARTUP)
+                for (granted in audioPermissionResults) {
+                    if (!granted) {
+                        waitingForAudioPermission = false
+                        permissionScanPending = false
                         startupScanComplete = true
+                    } else if (permissionScanPending || permissionScanGeneration > handledPermissionGeneration) {
+                        runScan(ScanTrigger.AUDIO_PERMISSION_GRANTED)
                     }
                 }
             }

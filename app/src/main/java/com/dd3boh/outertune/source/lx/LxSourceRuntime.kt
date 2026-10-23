@@ -210,7 +210,7 @@ object LxSourceRuntime {
                 createNativeBridge(js)
                 js.evaluate(appContext.assets.open("script/user-api-preload.js").bufferedReader().use { it.readText() })
                 js.getGlobalObject().getJSFunction("lx_setup").call(
-                    runtimeKey, "outertune_lx", "OuterTune 洛雪音源", "", "1.0.0", "", "", script
+                    runtimeKey, "outertune_lx", "AnhePlayer 洛雪音源", "", "1.0.0", "", "", script
                 )
                 js.evaluate(script)
                 loadedScriptHash = scriptHash

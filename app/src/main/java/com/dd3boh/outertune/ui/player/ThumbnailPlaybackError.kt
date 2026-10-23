@@ -61,6 +61,7 @@ fun ThumbnailPlaybackError(
     modifier: Modifier = Modifier,
 ) {
     val clipboardManager = LocalClipboard.current
+    val appName = stringResource(R.string.app_name)
 
     val playerBackground by rememberEnumPreference(
         key = PlayerBackgroundStyleKey,
@@ -136,8 +137,8 @@ fun ThumbnailPlaybackError(
                                 val systemInfo =
                                     "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) | ${BuildConfig.FLAVOR}\n${BuildConfig.APPLICATION_ID} | ${BuildConfig.BUILD_TYPE}\n${Build.BRAND} ${Build.DEVICE} (${Build.MODEL})\n${Build.VERSION.SDK_INT} (${Build.ID})\n\n"
                                 val clipData = ClipData.newPlainText(
-                                    "OuterTune player error",
-                                    AnnotatedString(systemInfo + "OuterTune player error\n\n" + error.stackTraceToString())
+                                    "$appName player error",
+                                    AnnotatedString(systemInfo + "$appName player error\n\n" + error.stackTraceToString())
                                 )
                                 clipboardManager.nativeClipboard.setPrimaryClip(clipData)
                             }

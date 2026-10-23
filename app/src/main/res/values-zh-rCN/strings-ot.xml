@@ -84,7 +84,7 @@
     <string name="grp_download_storage_description">下载目录、下载音质与缓存清理</string>
     <string name="grp_display_and_behavior">播放与界面</string>
     <string name="grp_library_and_content_description">播放历史、筛选与高级选项</string>
-    <string name="dl_main_path_builtin_default">内部存储 / Music / OuterTune（默认）</string>
+    <string name="dl_main_path_builtin_default">内部存储 / Music / AnhePlayer（默认）</string>
     <string name="scan_paths_title">配置扫描位置…</string>
     <string name="scan_paths_tooltip">所有子目录也将受到影响</string>
     <string name="scan_paths_add_folder">添加新文件夹</string>

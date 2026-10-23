@@ -13,7 +13,7 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * 内置默认下载目录：内部存储 `Music/OuterTune`
+ * 内置默认下载目录：内部存储 `Music/AnhePlayer`，兼容读取 `Music/OuterTune`
  *
  * Android 10+ 走 MediaStore 写入，不需要任何 SAF 授权，也不需要存储写权限；
  * Android 9 及以下退回直接写文件 + 通知媒体库扫描。
@@ -24,7 +24,10 @@ class MediaStoreDownloadDir(private val context: Context) {
     private val resolver = context.contentResolver
 
     /** 相对路径（带结尾 /），MediaStore 要求 */
-    private val relativePath: String = "${Environment.DIRECTORY_MUSIC}/OuterTune/"
+    private val relativePath: String = "${Environment.DIRECTORY_MUSIC}/AnhePlayer/"
+
+    /** 旧品牌目录仅用于兼容读取，不搬迁或自动清理文件 */
+    private val legacyRelativePath: String = "${Environment.DIRECTORY_MUSIC}/OuterTune/"
 
     /** mediaId -> uri 缓存，避免频繁查询 */
     private val cache = HashMap<String, Uri>()
@@ -106,32 +109,35 @@ class MediaStoreDownloadDir(private val context: Context) {
     fun getAvailableFiles(): Map<String, Uri> {
         val result = HashMap<String, Uri>()
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-        val selection: String
-        val args: Array<String>
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
-            args = arrayOf("$relativePath%")
-        } else {
-            selection = "${MediaStore.Audio.Media.DATA} LIKE ?"
-            args = arrayOf("%/$relativePath%")
-        }
-        runCatching {
-            resolver.query(
-                collection,
-                arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME),
-                selection,
-                args,
-                null,
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(0)
-                    val name = cursor.getString(1) ?: continue
-                    val mediaId = name.substringAfterLast('[', "").substringBeforeLast(']', "")
-                    if (mediaId.isBlank()) continue
-                    result[mediaId] = android.content.ContentUris.withAppendedId(collection, id)
-                }
+        // 先读旧目录再读新目录，相同 mediaId 优先使用新目录文件。
+        for (path in listOf(legacyRelativePath, relativePath)) {
+            val selection: String
+            val args: Array<String>
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
+                args = arrayOf("$path%")
+            } else {
+                selection = "${MediaStore.Audio.Media.DATA} LIKE ?"
+                args = arrayOf("%/$path%")
             }
-        }.onFailure { Log.w(tag, "查询默认下载目录失败: ${it.message}") }
+            runCatching {
+                resolver.query(
+                    collection,
+                    arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME),
+                    selection,
+                    args,
+                    null,
+                )?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(0)
+                        val name = cursor.getString(1) ?: continue
+                        val mediaId = name.substringAfterLast('[', "").substringBeforeLast(']', "")
+                        if (mediaId.isBlank()) continue
+                        result[mediaId] = android.content.ContentUris.withAppendedId(collection, id)
+                    }
+                }
+            }.onFailure { Log.w(tag, "查询默认下载目录失败: ${it.message}") }
+        }
         cache.putAll(result)
         return result
     }
@@ -141,11 +147,11 @@ class MediaStoreDownloadDir(private val context: Context) {
         val selection: String
         val args: Array<String>
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
-            args = arrayOf("$relativePath%")
+            selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
+            args = arrayOf("$relativePath%", "$legacyRelativePath%")
         } else {
-            selection = "${MediaStore.Audio.Media.DATA} LIKE ?"
-            args = arrayOf("%/$relativePath%")
+            selection = "${MediaStore.Audio.Media.DATA} LIKE ? OR ${MediaStore.Audio.Media.DATA} LIKE ?"
+            args = arrayOf("%/$relativePath%", "%/$legacyRelativePath%")
         }
         return runCatching {
             resolver.query(

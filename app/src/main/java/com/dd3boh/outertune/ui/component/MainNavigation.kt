@@ -54,7 +54,7 @@ fun MainNavigationDrawer(
     ModalDrawerSheet {
         Spacer(Modifier.height(40.dp))
         Text(
-            text = "OuterTune",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
         )
