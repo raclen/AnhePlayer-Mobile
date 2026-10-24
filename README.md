@@ -4,6 +4,13 @@
 
 AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次开发项目。项目保留原有 Material 3 界面、播放队列和 Media3 播放内核，在线搜索与播放链路接入酷我搜索和洛雪自定义音源。
 
+## 系统要求
+
+- Android 7.0（API 24）及以上
+- 正式包分为两份，按手机架构安装，没有同时包含两种架构的 universal 包：
+  - `arm64-v8a`：64 位手机
+  - `armeabi-v7a`：32 位手机
+
 ## 界面预览
 
 <p align="center">

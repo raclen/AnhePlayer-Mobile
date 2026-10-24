@@ -30,8 +30,8 @@ android {
         applicationId = "com.dd3boh.outertune"
         minSdk = 24
         targetSdk = 36
-        versionCode = 209
-        versionName = "2.0.9"
+        versionCode = 210
+        versionName = "2.0.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -98,8 +98,8 @@ android {
             isEnable = true
             reset()
 
-            // CI 与正式发布面向主流 64 位 Android 手机，仅输出 arm64-v8a。
-            include("arm64-v8a")
+            // 正式发布同时输出 64 位与 32 位，不打 universal。
+            include("arm64-v8a", "armeabi-v7a")
             isUniversalApk = false
         }
     }

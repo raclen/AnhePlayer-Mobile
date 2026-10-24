@@ -47,7 +47,7 @@
 - **正确做法**：保留本地 `media` dependency substitution（项目依赖其中的定制 API），并将 `media/build.gradle` 的 AGP 版本对齐主工程。
 - **验证方式**：`:app:compileCoreDebugKotlin` 不出现 `AgpVersionCompatibilityRule`，且 Media3 定制 override 可以编译。
 - **适用范围**：当前二次开发分支的 Android 构建。
-- 不主动打包APK，如果打包apk，需要增加版本号，只需要打包出v8a版本的包
+- 不主动打包 APK。如果打包，需要增加版本号，并同时输出 arm64-v8a 与 armeabi-v7a 两份 core 包，不打 universal、x86 或 full。应用内更新检查仍以已上传的 `arm64-v8a-release` APK 作为该版本已发布的依据。
 
 ## 本地 Android 构建使用临时 JDK 与 SDK
 

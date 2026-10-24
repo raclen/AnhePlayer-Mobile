@@ -1,3 +1,9 @@
+# AnhePlayer v2.0.10
+
+## 安装包
+
+- 正式包新增 32 位 `armeabi-v7a`，与 64 位 `arm64-v8a` 分开提供。最低系统仍为 Android 7.0，不提供同时包含两种架构的 universal 包。
+
 # AnhePlayer v2.0.9
 
 ## 更新入口
