@@ -41,6 +41,15 @@ val LxSourceNameKey = stringPreferencesKey("lxSourceName")
 val LxSourceQualityKey = stringPreferencesKey("lxSourceQuality")
 val DownloadQualityKey = stringPreferencesKey("downloadQuality")
 
+/**
+ * 电台 (Radio Browser)
+ */
+val RadioBitrateKey = stringPreferencesKey("radioBitrate")
+val RadioCountryKey = stringPreferencesKey("radioCountry")
+val RadioLanguageKey = stringPreferencesKey("radioLanguage")
+val RadioLastStationUuidKey = stringPreferencesKey("radioLastStationUuid")
+val RadioFavoritesKey = androidx.datastore.preferences.core.stringSetPreferencesKey("radioFavoriteUuids")
+
 
 
 /**

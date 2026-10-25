@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.SdCard
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,12 @@ fun SettingsScreen(
                 description = stringResource(R.string.lx_source_description),
                 icon = { Icon(Icons.Rounded.MusicNote, null) },
                 onClick = { navController.navigate("settings/lx_source") }
+            )
+            PreferenceEntry(
+                title = { Text("电台设置") },
+                description = "码率、国家地区与语言筛选",
+                icon = { Icon(Icons.Rounded.Radio, null) },
+                onClick = { navController.navigate("settings/radio") }
             )
             PreferenceEntry(
                 title = { Text(stringResource(R.string.grp_local_media)) },

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -41,6 +42,7 @@ private data class DrawerDestination(
 private val drawerDestinations = listOf(
     DrawerDestination(Screens.Songs.route, "歌曲", Icons.Rounded.MusicNote),
     DrawerDestination(Screens.Playlists.route, "歌单", Icons.AutoMirrored.Rounded.QueueMusic),
+    DrawerDestination(Screens.Radio.route, "电台", Icons.Rounded.Radio),
     DrawerDestination(Screens.Settings.route, "设置", Icons.Rounded.Settings),
     DrawerDestination("settings/about", "关于", Icons.Rounded.Info),
 )
@@ -94,6 +96,7 @@ fun MainNavigationTopBar(
         Screens.Songs.route -> stringResource(R.string.songs)
         "history" -> stringResource(R.string.songs)
         Screens.Playlists.route -> "歌单"
+        Screens.Radio.route -> stringResource(R.string.radio)
         Screens.Settings.route -> stringResource(R.string.settings)
         "settings/about" -> stringResource(R.string.about)
         else -> return

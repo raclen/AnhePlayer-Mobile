@@ -146,6 +146,7 @@ import com.dd3boh.outertune.ui.screens.AlbumScreen
 import com.dd3boh.outertune.ui.screens.HistoryScreen
 import com.dd3boh.outertune.ui.screens.HomeScreen
 import com.dd3boh.outertune.ui.screens.PlayerScreen
+import com.dd3boh.outertune.ui.screens.RadioScreen
 import com.dd3boh.outertune.ui.screens.Screens
 import com.dd3boh.outertune.ui.screens.StatsScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistAlbumsScreen
@@ -169,6 +170,7 @@ import com.dd3boh.outertune.ui.screens.settings.EqualizerScreen
 import com.dd3boh.outertune.ui.screens.settings.LibrariesScreen
 import com.dd3boh.outertune.ui.screens.settings.LocalFoldersSettings
 import com.dd3boh.outertune.ui.screens.settings.LxSourceSettings
+import com.dd3boh.outertune.ui.screens.settings.RadioSettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.SettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.StorageSettings
 import com.dd3boh.outertune.ui.theme.OuterTuneTheme
@@ -600,6 +602,9 @@ class MainActivity : ComponentActivity() {
                                     composable(Screens.Playlists.route) {
                                         LibraryPlaylistsScreen(navController)
                                     }
+                                    composable(Screens.Radio.route) {
+                                        RadioScreen(navController, scrollBehavior)
+                                    }
                                     composable(Screens.Library.route) {
                                         LibraryScreen(navController, scrollBehavior)
                                     }
@@ -698,6 +703,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                     composable("settings/lx_source") {
                                         LxSourceSettings(navController, scrollBehavior)
+                                    }
+                                    composable("settings/radio") {
+                                        RadioSettingsScreen(navController, scrollBehavior)
                                     }
                                     composable("settings/storage") {
                                         StorageSettings(navController, scrollBehavior)

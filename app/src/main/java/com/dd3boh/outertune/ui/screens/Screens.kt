@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -36,6 +37,7 @@ sealed class Screens(
     data object Artists : Screens(R.string.artists, Icons.Rounded.Person, "artists")
     data object Albums : Screens(R.string.albums, Icons.Rounded.Album, "albums")
     data object Playlists : Screens(R.string.playlists, Icons.AutoMirrored.Rounded.QueueMusic, "playlists")
+    data object Radio : Screens(R.string.radio, Icons.Rounded.Radio, "radio")
     data object Library : Screens(R.string.library, Icons.Rounded.LibraryMusic, "library")
     data object Settings : Screens(R.string.settings, Icons.Rounded.Settings, "settings")
     data object Player : Screens(R.string.player, Icons.Rounded.PlayCircle, "player")
@@ -70,6 +72,7 @@ sealed class Screens(
             Artists to 'A',
             Albums to 'B',
             Playlists to 'L',
+            Radio to 'R',
             Settings to 'M',
 //            Player to 'P',
         )

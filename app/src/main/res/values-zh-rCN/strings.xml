@@ -44,6 +44,8 @@
     <string name="playlist_is_empty">播放列表为空</string>
     <string name="retry">重试</string>
     <string name="radio">电台</string>
+    <string name="radio_settings">电台设置</string>
+    <string name="radio_settings_summary">码率、国家地区与语言筛选</string>
     <string name="shuffle">随机播放</string>
     <string name="reset">重置</string>
     <string name="details">详情</string>
