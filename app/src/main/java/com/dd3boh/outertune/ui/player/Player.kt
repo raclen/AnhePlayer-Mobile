@@ -194,6 +194,9 @@ fun BottomSheetPlayer(
         if (qbInit && !queueBoard.masterQueues.isEmpty() && state.isDismissed) {
             Log.d(TAG, "Triggering sheet collapseSoft")
             state.collapseSoft()
+        } else if ((!qbInit || queueBoard.masterQueues.isEmpty()) && !state.isDismissed) {
+            Log.d(TAG, "Triggering sheet dismiss")
+            state.dismiss()
         }
     }
 

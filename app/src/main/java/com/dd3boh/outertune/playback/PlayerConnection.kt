@@ -28,6 +28,7 @@ import com.dd3boh.outertune.extensions.getQueueWindows
 import com.dd3boh.outertune.extensions.metadata
 import com.dd3boh.outertune.lyrics.PlayerLyrics
 import com.dd3boh.outertune.playback.queues.Queue
+import com.dd3boh.outertune.radio.RadioPlayerManager
 import com.dd3boh.outertune.utils.reportException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -155,6 +156,7 @@ class PlayerConnection(
         isRadio: Boolean = false,
         title: String? = null
     ) {
+        RadioPlayerManager.stop()
         service.playQueue(
             queue = queue,
             shouldResume = shouldResume,

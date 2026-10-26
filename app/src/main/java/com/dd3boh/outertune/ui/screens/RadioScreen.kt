@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -81,6 +81,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.dd3boh.outertune.LocalPlayerAwareWindowInsets
+import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.radio.RadioPlaybackState
 import com.dd3boh.outertune.radio.RadioPlayerManager
 import com.dd3boh.outertune.radio.RadioStation
@@ -109,8 +110,10 @@ fun RadioScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val activeStation: RadioStation? = stations.getOrNull(currentIndex) ?: currentStation
+    val playerConnection = LocalPlayerConnection.current
 
     LaunchedEffect(Unit) {
+        playerConnection?.softKillPlayer()
         if (stations.isEmpty()) {
             viewModel.refreshStations()
         }
@@ -253,7 +256,7 @@ fun RadioContent(
                 // 随机漫游，放在顶部避免挤占底部主控制栏
                 IconButton(onClick = onShuffle) {
                     Icon(
-                        imageVector = Icons.Rounded.Casino,
+                        imageVector = Icons.Rounded.Shuffle,
                         contentDescription = "随机一站",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

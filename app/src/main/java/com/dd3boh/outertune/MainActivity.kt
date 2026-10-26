@@ -514,6 +514,13 @@ class MainActivity : ComponentActivity() {
                             Log.v(MAIN_TAG, "RC-3")
                             val drawerState = rememberDrawerState(DrawerValue.Closed)
 
+                            LaunchedEffect(navBackStackEntry?.destination?.route) {
+                                if (navBackStackEntry?.destination?.route == Screens.Radio.route) {
+                                    playerConnection?.softKillPlayer()
+                                    playerBottomSheetState.dismiss()
+                                }
+                            }
+
 
                             val navHost: @Composable() (() -> Unit) = @Composable {
                                 NavHost(
@@ -925,7 +932,10 @@ class MainActivity : ComponentActivity() {
                                         currentRoute = navBackStackEntry?.destination?.route,
                                         hasUnreadUpdate = appUpdateState.hasUnreadUpdate,
                                         onNavigate = { route ->
-                                            if (playerBottomSheetState.isExpanded) {
+                                            if (route == Screens.Radio.route) {
+                                                playerConnection?.softKillPlayer()
+                                                playerBottomSheetState.dismiss()
+                                            } else if (playerBottomSheetState.isExpanded) {
                                                 playerBottomSheetState.collapseSoft()
                                             }
                                             if (navBackStackEntry?.destination?.route == route) {
