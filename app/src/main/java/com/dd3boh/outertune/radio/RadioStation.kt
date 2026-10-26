@@ -27,6 +27,18 @@ data class RadioStation(
     val playUrl: String
         get() = urlResolved.trim().ifBlank { url.trim() }
 
+    /**
+     * 是否 HLS 流。
+     * Radio Browser 的 hls 字段为 1 时代表该电台是 HLS；
+     * 另外部分接口返回的地址不以 .m3u8 结尾，但路径/查询参数里含有 m3u8。
+     */
+    val isHlsStream: Boolean
+        get() {
+            if (hls == 1) return true
+            val lower = playUrl.lowercase()
+            return lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=hls")
+        }
+
     val displayTitle: String
         get() = name.trim().ifBlank { "未命名电台" }
 

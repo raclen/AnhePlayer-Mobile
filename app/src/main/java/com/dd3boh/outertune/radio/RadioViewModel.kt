@@ -14,6 +14,7 @@ import com.dd3boh.outertune.utils.get
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +44,12 @@ class RadioViewModel @Inject constructor(
 
     private var loadJob: Job? = null
 
+    /**
+     * 自动跳过计数：某些电台已停播或流地址失效，连续切台失败时跳过它们，
+     * 避免用户每点一次「下一曲」就只会看到一条报错。
+     */
+    private var autoSkipRemaining = 0
+
     val favorites = context.dataStore.data
         .map { it[RadioFavoritesKey] ?: emptySet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
@@ -61,6 +68,21 @@ class RadioViewModel @Inject constructor(
 
     init {
         RadioPlayerManager.initialize(context)
+        // 播放失败且是自动切台造成的，继续往后跳，最多连续跳 MAX_AUTO_SKIP 台
+        viewModelScope.launch {
+            RadioPlayerManager.playbackState.collect { state ->
+                if (state == RadioPlaybackState.ERROR && autoSkipRemaining > 0) {
+                    autoSkipRemaining--
+                    // 轻微延迟，避免快速连发 prepare 把播放器打乱
+                    delay(350)
+                    if (RadioPlayerManager.playbackState.value == RadioPlaybackState.ERROR) {
+                        skipToNextStation()
+                    }
+                } else if (state == RadioPlaybackState.PLAYING) {
+                    autoSkipRemaining = 0
+                }
+            }
+        }
         viewModelScope.launch {
             // 当筛选配置发生变化时自动刷新电台列表
             bitratePref.collect { refreshStations() }
@@ -109,6 +131,10 @@ class RadioViewModel @Inject constructor(
         refreshStations()
     }
 
+    /**
+     * 选台并播放。本方法不碰自动跳过预算，由调用方决定：
+     * 「上一台/下一台/随机/调频滑动」设 [MAX_AUTO_SKIP]；从列表主动选台置 0。
+     */
     fun selectStation(index: Int, autoPlay: Boolean = true) {
         val list = _stations.value
         if (index in list.indices) {
@@ -123,11 +149,16 @@ class RadioViewModel @Inject constructor(
         }
     }
 
+    /** 用户主动切台：允许失败后连续跳过几台 */
+    private fun selectStationWithAutoSkip(index: Int) {
+        autoSkipRemaining = MAX_AUTO_SKIP
+        selectStation(index)
+    }
+
     fun nextStation() {
         val list = _stations.value
         if (list.isNotEmpty()) {
-            val next = (_currentIndex.value + 1) % list.size
-            selectStation(next, autoPlay = true)
+            selectStationWithAutoSkip((_currentIndex.value + 1) % list.size)
         }
     }
 
@@ -135,7 +166,7 @@ class RadioViewModel @Inject constructor(
         val list = _stations.value
         if (list.isNotEmpty()) {
             val prev = if (_currentIndex.value - 1 < 0) list.size - 1 else _currentIndex.value - 1
-            selectStation(prev, autoPlay = true)
+            selectStationWithAutoSkip(prev)
         }
     }
 
@@ -143,10 +174,23 @@ class RadioViewModel @Inject constructor(
         val list = _stations.value
         if (list.size > 1) {
             val random = list.indices.filter { it != _currentIndex.value }.random()
-            selectStation(random, autoPlay = true)
+            selectStationWithAutoSkip(random)
         } else {
             refreshStations(shuffleOrder = true)
         }
+    }
+
+    /** 失败后自动切下一台（不重置预算） */
+    private fun skipToNextStation() {
+        val list = _stations.value
+        if (list.isNotEmpty()) {
+            selectStation((_currentIndex.value + 1) % list.size)
+        }
+    }
+
+    fun retryCurrentStation() {
+        autoSkipRemaining = 0
+        RadioPlayerManager.retry()
     }
 
     fun toggleFavorite(station: RadioStation) {
@@ -159,5 +203,10 @@ class RadioViewModel @Inject constructor(
         viewModelScope.launch {
             context.dataStore.edit { it[RadioFavoritesKey] = nextFavs }
         }
+    }
+
+    companion object {
+        /** 一次点击最多连续跳过多少台 */
+        private const val MAX_AUTO_SKIP = 4
     }
 }

@@ -1,13 +1,10 @@
 package com.dd3boh.outertune.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -36,7 +34,6 @@ import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -71,7 +68,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -81,7 +77,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
@@ -92,7 +87,6 @@ import com.dd3boh.outertune.radio.RadioStation
 import com.dd3boh.outertune.radio.RadioViewModel
 import com.dd3boh.outertune.ui.component.button.IconButton
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,7 +140,11 @@ fun RadioScreen(
                 val newIndex = (currentIndex + offset).coerceIn(0, (stations.size - 1).coerceAtLeast(0))
                 if (newIndex != currentIndex && newIndex in stations.indices) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.selectStation(newIndex, autoPlay = true)
+                    if (offset > 0) {
+                        viewModel.nextStation()
+                    } else {
+                        viewModel.previousStation()
+                    }
                 }
             },
             onToggleFavorite = {
@@ -158,6 +156,10 @@ fun RadioScreen(
             onPrevious = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 viewModel.previousStation()
+            },
+            onNext = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.nextStation()
             },
             onTogglePlay = {
                 haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
@@ -176,7 +178,7 @@ fun RadioScreen(
             },
             onRetry = {
                 if (activeStation != null) {
-                    RadioPlayerManager.play(activeStation)
+                    viewModel.retryCurrentStation()
                 } else {
                     viewModel.refreshStations()
                 }
@@ -220,6 +222,7 @@ fun RadioContent(
     onStepChange: (Int) -> Unit,
     onToggleFavorite: () -> Unit,
     onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onTogglePlay: () -> Unit,
     onShuffle: () -> Unit,
     onOpenList: () -> Unit,
@@ -247,6 +250,15 @@ fun RadioContent(
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // 随机漫游，放在顶部避免挤占底部主控制栏
+                IconButton(onClick = onShuffle) {
+                    Icon(
+                        imageVector = Icons.Rounded.Casino,
+                        contentDescription = "随机一站",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 IconButton(onClick = onRefresh) {
                     Icon(
                         imageVector = Icons.Rounded.Refresh,
@@ -287,15 +299,15 @@ fun RadioContent(
                 .padding(vertical = 12.dp)
         )
 
-        // 底部核心控制栏（收藏、上一台、大播放键、随机漫游、列表抽屉）
+        // 底部核心控制栏（收藏、上一台、大播放键、下一台、列表抽屉）
         RadioControlsRow(
             isFavorite = isFavorite,
             playbackState = playbackState,
             isLoading = isLoading,
             onToggleFavorite = onToggleFavorite,
             onPrevious = onPrevious,
+            onNext = onNext,
             onTogglePlay = onTogglePlay,
-            onShuffle = onShuffle,
             onOpenList = onOpenList
         )
 
@@ -313,7 +325,7 @@ private fun RadioStatusBadge(
     val (statusColor, statusText) = when (playbackState) {
         RadioPlaybackState.PLAYING -> Color(0xFF4CAF50) to "直播中"
         RadioPlaybackState.BUFFERING -> Color(0xFFFFB300) to "连接中"
-        RadioPlaybackState.ERROR -> MaterialTheme.colorScheme.error to (errorMessage ?: "连不上")
+        RadioPlaybackState.ERROR -> MaterialTheme.colorScheme.error to "连接失败"
         RadioPlaybackState.PAUSED -> MaterialTheme.colorScheme.outline to "已暂停"
         RadioPlaybackState.IDLE -> MaterialTheme.colorScheme.outline to "就绪"
     }
@@ -353,14 +365,19 @@ private fun RadioStatusBadge(
             text = statusText,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // 避免长错误文案把顶部徽章撑成多行方块
+            modifier = Modifier.widthIn(max = 96.dp)
         )
 
         if (totalCount > 0) {
             Text(
                 text = " · ${currentIndex + 1}/$totalCount",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
     }
@@ -474,7 +491,19 @@ private fun RadioHeroCard(
                     text = errorMessage ?: "播放失败，轻触重试",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.clickable { onRetry() }
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .clickable { onRetry() }
+                )
+                Text(
+                    text = "轻触重试，或点右侧「下一台」继续换台",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp)
                 )
             }
         } else {
@@ -594,7 +623,7 @@ private fun RadioTuningDial(
 }
 
 /**
- * 底部操作栏：收藏、上一台、播放/暂停、随机漫游（Roam）、电台抽屉
+ * 底部操作栏：收藏、上一台、播放/暂停、下一台、电台抽屉
  */
 @Composable
 private fun RadioControlsRow(
@@ -603,8 +632,8 @@ private fun RadioControlsRow(
     isLoading: Boolean,
     onToggleFavorite: () -> Unit,
     onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onTogglePlay: () -> Unit,
-    onShuffle: () -> Unit,
     onOpenList: () -> Unit,
 ) {
     Row(
@@ -617,7 +646,8 @@ private fun RadioControlsRow(
             Icon(
                 imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 contentDescription = if (isFavorite) "取消收藏" else "收藏电台",
-                tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
 
@@ -658,11 +688,11 @@ private fun RadioControlsRow(
             }
         }
 
-        // 随机漫游（Roam / Shuffle）
-        IconButton(onClick = onShuffle) {
+        // 下一台（跳下一曲）
+        IconButton(onClick = onNext) {
             Icon(
-                imageVector = Icons.Rounded.Casino,
-                contentDescription = "随机一站",
+                imageVector = Icons.Rounded.SkipNext,
+                contentDescription = "下一台",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(28.dp)
             )
@@ -673,7 +703,8 @@ private fun RadioControlsRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.FormatListBulleted,
                 contentDescription = "电台列表",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -842,6 +873,7 @@ private fun RadioContentPreview() {
                 onStepChange = {},
                 onToggleFavorite = {},
                 onPrevious = {},
+                onNext = {},
                 onTogglePlay = {},
                 onShuffle = {},
                 onOpenList = {},
