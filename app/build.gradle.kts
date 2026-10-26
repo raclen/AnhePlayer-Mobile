@@ -30,8 +30,8 @@ android {
         applicationId = "com.dd3boh.outertune"
         minSdk = 24
         targetSdk = 36
-        versionCode = 211
-        versionName = "2.0.11"
+        versionCode = 212
+        versionName = "2.0.12"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -39,14 +39,22 @@ android {
         localeFilters += "zh-rCN"
     }
 
-    val hasReleaseSigning = (keystoreProperties["storeFile"] as? String)
-        ?.takeIf { it.isNotBlank() }
-        ?.let { rootProject.file(it).isFile } == true
+    // keystore.properties 可能来自仓库根（本地）或运行目录（CI），统一按仓库根解析
+    val keystoreStoreFileValue = (keystoreProperties["storeFile"] as? String)?.takeIf { it.isNotBlank() }
+    val keystoreStoreFile = keystoreStoreFileValue?.let { rootProject.file(it) }
+    val hasReleaseSigning = keystoreStoreFile?.isFile == true
+
+    if (!hasReleaseSigning) {
+        logger.warn(
+            "[signing] 未找到有效的 release 签名配置（keystore.properties / storeFile），" +
+                "release 将回退到 debug 签名。这会导致每个构建环境的证书不一致、用户无法覆盖安装。"
+        )
+    }
 
     signingConfigs {
         if (hasReleaseSigning) {
             create("ot_release") {
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                storeFile = keystoreStoreFile
                 (keystoreProperties["keyAlias"] as? String)?.let {
                     keyAlias = it
                 }
@@ -66,10 +74,12 @@ android {
             isShrinkResources = true
             isCrunchPngs = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // 发布包必须用固定证书签名：一旦用 debug 签名，不同构建环境的证书不同，
+            // 用户升级时会因签名冲突而无法覆盖安装。缺失就构建失败，而不是静默回退。
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("ot_release")
             } else {
-                signingConfigs.getByName("debug")
+                null
             }
         }
         debug {
@@ -84,8 +94,28 @@ android {
 //            isDebuggable = true
             isProfileable = true
             matchingFallbacks += listOf("release")
+            // 内部测试包，允许回退到 debug 签名
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("ot_release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
+
+    // 发布包必须使用固定证书签名，缺配置时直接失败，而不是产出签名不一致的包。
+    tasks.matching { it.name.startsWith("package") && it.name.contains("CoreRelease") }
+        .configureEach {
+            if (!hasReleaseSigning) {
+                doFirst {
+                    throw GradleException(
+                        "缺少 release 签名配置：未找到 keystore.properties 或其中 storeFile 指向的文件不存在。\n" +
+                            "请先配置 keystore.properties（storeFile/keyAlias/keyPassword/storePassword），" +
+                            "否则构建出的包证书与线上不一致，用户升级时会因签名冲突而无法覆盖安装。"
+                    )
+                }
+            }
+        }
 
     buildFeatures {
         compose = true
@@ -247,6 +277,7 @@ dependencies {
     implementation(libs.viewmodel.compose)
 
     implementation(libs.media3)
+    implementation(libs.media3.hls)
     implementation(libs.media3.okhttp)
     implementation(libs.media3.session)
     implementation(libs.media3.workmanager)
