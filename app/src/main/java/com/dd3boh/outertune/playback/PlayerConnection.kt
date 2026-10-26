@@ -28,6 +28,7 @@ import com.dd3boh.outertune.extensions.getQueueWindows
 import com.dd3boh.outertune.extensions.metadata
 import com.dd3boh.outertune.lyrics.PlayerLyrics
 import com.dd3boh.outertune.playback.queues.Queue
+import com.dd3boh.outertune.radio.RadioPlaybackState
 import com.dd3boh.outertune.radio.RadioPlayerManager
 import com.dd3boh.outertune.utils.reportException
 import kotlinx.coroutines.Dispatchers
@@ -216,6 +217,9 @@ class PlayerConnection(
 
     override fun onPlayWhenReadyChanged(newPlayWhenReady: Boolean, reason: Int) {
         playWhenReady.value = newPlayWhenReady
+        if (newPlayWhenReady && RadioPlayerManager.playbackState.value != RadioPlaybackState.IDLE) {
+            RadioPlayerManager.stop()
+        }
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

@@ -83,6 +83,11 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".radio.RadioPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
             android:exported="true">

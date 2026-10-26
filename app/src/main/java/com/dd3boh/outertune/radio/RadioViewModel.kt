@@ -68,6 +68,9 @@ class RadioViewModel @Inject constructor(
 
     init {
         RadioPlayerManager.initialize(context)
+        RadioPlayerManager.onSkipNext = { nextStation() }
+        RadioPlayerManager.onSkipPrevious = { previousStation() }
+
         // 播放失败且是自动切台造成的，继续往后跳，最多连续跳 MAX_AUTO_SKIP 台
         viewModelScope.launch {
             RadioPlayerManager.playbackState.collect { state ->
@@ -118,9 +121,12 @@ class RadioViewModel @Inject constructor(
             if (result.isNotEmpty()) {
                 val lastUuid = context.dataStore.get(RadioLastStationUuidKey, "")
                 val foundIndex = result.indexOfFirst { it.stationUuid == lastUuid }
-                _currentIndex.value = if (foundIndex >= 0) foundIndex else 0
+                val targetIndex = if (foundIndex >= 0) foundIndex else 0
+                _currentIndex.value = targetIndex
+                RadioPlayerManager.updateStationList(result, targetIndex)
             } else {
                 _currentIndex.value = 0
+                RadioPlayerManager.updateStationList(emptyList(), 0)
             }
             _isLoading.value = false
         }
@@ -140,6 +146,7 @@ class RadioViewModel @Inject constructor(
         if (index in list.indices) {
             _currentIndex.value = index
             val station = list[index]
+            RadioPlayerManager.updateStationList(list, index)
             viewModelScope.launch {
                 context.dataStore.edit { it[RadioLastStationUuidKey] = station.stationUuid }
             }
@@ -203,6 +210,12 @@ class RadioViewModel @Inject constructor(
         viewModelScope.launch {
             context.dataStore.edit { it[RadioFavoritesKey] = nextFavs }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        RadioPlayerManager.onSkipNext = null
+        RadioPlayerManager.onSkipPrevious = null
     }
 
     companion object {

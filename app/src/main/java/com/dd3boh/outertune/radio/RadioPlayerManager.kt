@@ -1,11 +1,15 @@
 package com.dd3boh.outertune.radio
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.datastore.preferences.core.edit
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -14,9 +18,18 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionResult
+import com.dd3boh.outertune.MainActivity
+import com.dd3boh.outertune.constants.RadioLastStationUuidKey
+import com.dd3boh.outertune.utils.CoilBitmapLoader
+import com.dd3boh.outertune.utils.dataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -34,13 +47,18 @@ enum class RadioPlaybackState {
  * 说明：电台流大多为 http/https 音频流（MP3/AAC）或 HLS(.m3u8)。
  * HLS 依赖 media3-exoplayer-hls 模块，已通过 composite build 依赖替换接入；
  * 数据源统一走 OkHttp 并带上 User-Agent，避免部分电台服务端拒绝默认 UA。
+ * 配合 [RadioPlaybackService] 在后台提供前台服务保活与通知栏媒体控制。
  */
 object RadioPlayerManager {
     private const val TAG = "RadioPlayerManager"
     private const val USER_AGENT = "AnhePlayer-Mobile/2.0 (Android)"
 
     private var exoPlayer: ExoPlayer? = null
+    private var mediaSession: MediaSession? = null
     private var appContext: Context? = null
+
+    val session: MediaSession?
+        get() = mediaSession
 
     private val _currentStation = MutableStateFlow<RadioStation?>(null)
     val currentStation: StateFlow<RadioStation?> = _currentStation.asStateFlow()
@@ -50,6 +68,37 @@ object RadioPlayerManager {
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    var onSkipNext: (() -> Unit)? = null
+    var onSkipPrevious: (() -> Unit)? = null
+
+    private var stationList: List<RadioStation> = emptyList()
+    private var currentIndex: Int = -1
+
+    fun updateStationList(list: List<RadioStation>, index: Int) {
+        stationList = list
+        currentIndex = index
+    }
+
+    fun skipNext() {
+        if (onSkipNext != null) {
+            onSkipNext?.invoke()
+        } else if (stationList.isNotEmpty()) {
+            val nextIndex = (currentIndex + 1) % stationList.size
+            currentIndex = nextIndex
+            play(stationList[nextIndex])
+        }
+    }
+
+    fun skipPrev() {
+        if (onSkipPrevious != null) {
+            onSkipPrevious?.invoke()
+        } else if (stationList.isNotEmpty()) {
+            val prevIndex = if (currentIndex - 1 < 0) stationList.size - 1 else currentIndex - 1
+            currentIndex = prevIndex
+            play(stationList[prevIndex])
+        }
+    }
 
     fun initialize(context: Context) {
         if (exoPlayer != null) return
@@ -74,51 +123,114 @@ object RadioPlayerManager {
         val dataSourceFactory = DefaultDataSource.Factory(app, okHttpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
-        exoPlayer = ExoPlayer.Builder(app)
+        val player = ExoPlayer.Builder(app)
             .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
-            .apply {
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(state: Int) {
-                        when (state) {
-                            Player.STATE_BUFFERING -> {
-                                _playbackState.value = RadioPlaybackState.BUFFERING
-                                _errorMessage.value = null
-                            }
-                            Player.STATE_READY -> {
-                                _playbackState.value =
-                                    if (playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
-                                _errorMessage.value = null
-                            }
-                            Player.STATE_ENDED -> {
-                                _playbackState.value = RadioPlaybackState.IDLE
-                            }
-                            Player.STATE_IDLE -> {
-                                if (_playbackState.value != RadioPlaybackState.ERROR) {
-                                    _playbackState.value = RadioPlaybackState.IDLE
-                                }
-                            }
+
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                when (state) {
+                    Player.STATE_BUFFERING -> {
+                        _playbackState.value = RadioPlaybackState.BUFFERING
+                        _errorMessage.value = null
+                    }
+                    Player.STATE_READY -> {
+                        _playbackState.value =
+                            if (player.playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
+                        _errorMessage.value = null
+                    }
+                    Player.STATE_ENDED -> {
+                        _playbackState.value = RadioPlaybackState.IDLE
+                    }
+                    Player.STATE_IDLE -> {
+                        if (_playbackState.value != RadioPlaybackState.ERROR) {
+                            _playbackState.value = RadioPlaybackState.IDLE
                         }
                     }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        if (isPlaying) {
-                            _playbackState.value = RadioPlaybackState.PLAYING
-                        } else if (_playbackState.value == RadioPlaybackState.PLAYING) {
-                            _playbackState.value = RadioPlaybackState.PAUSED
-                        }
-                    }
-
-                    override fun onPlayerError(error: PlaybackException) {
-                        Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
-                        _playbackState.value = RadioPlaybackState.ERROR
-                        _errorMessage.value = toFriendlyMessage(error)
-                    }
-                })
+                }
             }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (player.playbackState == Player.STATE_READY) {
+                    _playbackState.value =
+                        if (playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    _playbackState.value = RadioPlaybackState.PLAYING
+                } else if (_playbackState.value == RadioPlaybackState.PLAYING) {
+                    _playbackState.value = RadioPlaybackState.PAUSED
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
+                _playbackState.value = RadioPlaybackState.ERROR
+                _errorMessage.value = toFriendlyMessage(error)
+            }
+        })
+
+        exoPlayer = player
+
+        // 创建 MediaSession 以接入系统媒体控制体系（锁屏/耳机按键/Quick Settings）
+        val sessionActivityIntent = PendingIntent.getActivity(
+            app,
+            0,
+            Intent(app, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val sessionCallback = object : MediaSession.Callback {
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): MediaSession.ConnectionResult {
+                val availableCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailablePlayerCommands(availableCommands)
+                    .build()
+            }
+
+            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+            override fun onPlayerCommandRequest(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                playerCommand: Int
+            ): Int {
+                when (playerCommand) {
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                        skipNext()
+                        return SessionResult.RESULT_SUCCESS
+                    }
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                        skipPrev()
+                        return SessionResult.RESULT_SUCCESS
+                    }
+                }
+                return super.onPlayerCommandRequest(session, controller, playerCommand)
+            }
+        }
+
+        mediaSession = MediaSession.Builder(app, player)
+            .setBitmapLoader(CoilBitmapLoader(app))
+            .setSessionActivity(sessionActivityIntent)
+            .setCallback(sessionCallback)
+            .build()
     }
 
     fun play(station: RadioStation) {
@@ -134,16 +246,32 @@ object RadioPlayerManager {
         _playbackState.value = RadioPlaybackState.BUFFERING
         _errorMessage.value = null
 
+        // 启动前台服务，保持后台运行与通知栏控制，避免约 3 分钟后被系统终止
+        appContext?.let { ctx ->
+            RadioPlaybackService.start(ctx)
+            CoroutineScope(Dispatchers.IO).launch {
+                ctx.dataStore.edit { it[RadioLastStationUuidKey] = station.stationUuid }
+            }
+        }
+
         try {
             // 上一次播放失败时先重置，避免带着错误状态复用播放器
             if (player.playerError != null) {
                 player.stop()
             }
 
+            val mediaMetadata = MediaMetadata.Builder()
+                .setTitle(station.displayTitle)
+                .setArtist(station.displaySubtitle)
+                .setAlbumTitle(station.displayCodecAndBitrate)
+                .setArtworkUri(station.favicon?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) })
+                .build()
+
             val uri = Uri.parse(url)
             val builder = MediaItem.Builder()
                 .setUri(uri)
                 .setMediaId(station.stationUuid)
+                .setMediaMetadata(mediaMetadata)
 
             // 部分电台地址不带 .m3u8 后缀（或是重定向后的短链接），
             // 用接口返回的 hls 标记显式指定 HLS 类型，避免被当成普通音频流解析
@@ -172,6 +300,9 @@ object RadioPlayerManager {
             } else if (player.playerError != null && station != null) {
                 play(station)
             } else {
+                appContext?.let { ctx ->
+                    RadioPlaybackService.start(ctx)
+                }
                 player.play()
             }
         }
@@ -191,9 +322,15 @@ object RadioPlayerManager {
     fun stop() {
         exoPlayer?.stop()
         _playbackState.value = RadioPlaybackState.IDLE
+        appContext?.let { ctx ->
+            RadioPlaybackService.stop(ctx)
+        }
     }
 
     fun release() {
+        stop()
+        mediaSession?.release()
+        mediaSession = null
         exoPlayer?.release()
         exoPlayer = null
     }
