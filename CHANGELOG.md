@@ -1,3 +1,9 @@
+# AnhePlayer v2.0.15
+
+## 紧急修复
+
+- **修复点击电台页面闪退**：排查并修复电台 MediaSession 与系统主音乐服务 MediaLibrarySession 共享默认空 ID 导致抛出 `IllegalStateException: Session ID must be unique` 引起的闪退；为电台独立指定专属会话 ID（`RadioPlaybackSession`），并增加防御性容错处理，保障电台页面秒开无异常。
+
 # AnhePlayer v2.0.14
 
 ## 问题修复

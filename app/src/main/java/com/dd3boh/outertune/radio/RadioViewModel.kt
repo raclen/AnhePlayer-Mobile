@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.radio
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -67,7 +68,11 @@ class RadioViewModel @Inject constructor(
         .distinctUntilChanged()
 
     init {
-        RadioPlayerManager.initialize(context)
+        try {
+            RadioPlayerManager.initialize(context)
+        } catch (e: Exception) {
+            Log.e("RadioViewModel", "Failed to initialize RadioPlayerManager", e)
+        }
         RadioPlayerManager.onSkipNext = { nextStation() }
         RadioPlayerManager.onSkipPrevious = { previousStation() }
 

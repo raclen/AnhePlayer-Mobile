@@ -101,136 +101,146 @@ object RadioPlayerManager {
     }
 
     fun initialize(context: Context) {
-        if (exoPlayer != null) return
         val app = context.applicationContext
         appContext = app
 
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-            .build()
+        if (exoPlayer == null) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build()
 
-        val httpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
+            val httpClient = OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
 
-        val okHttpDataSourceFactory = OkHttpDataSource.Factory(httpClient)
-            .setUserAgent(USER_AGENT)
+            val okHttpDataSourceFactory = OkHttpDataSource.Factory(httpClient)
+                .setUserAgent(USER_AGENT)
 
-        val dataSourceFactory = DefaultDataSource.Factory(app, okHttpDataSourceFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            val dataSourceFactory = DefaultDataSource.Factory(app, okHttpDataSourceFactory)
+            val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
-        val player = ExoPlayer.Builder(app)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
+            val player = ExoPlayer.Builder(app)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .setAudioAttributes(audioAttributes, true)
+                .setHandleAudioBecomingNoisy(true)
+                .setWakeMode(C.WAKE_MODE_NETWORK)
+                .build()
 
-        player.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                when (state) {
-                    Player.STATE_BUFFERING -> {
-                        _playbackState.value = RadioPlaybackState.BUFFERING
-                        _errorMessage.value = null
-                    }
-                    Player.STATE_READY -> {
-                        _playbackState.value =
-                            if (player.playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
-                        _errorMessage.value = null
-                    }
-                    Player.STATE_ENDED -> {
-                        _playbackState.value = RadioPlaybackState.IDLE
-                    }
-                    Player.STATE_IDLE -> {
-                        if (_playbackState.value != RadioPlaybackState.ERROR) {
+            player.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    when (state) {
+                        Player.STATE_BUFFERING -> {
+                            _playbackState.value = RadioPlaybackState.BUFFERING
+                            _errorMessage.value = null
+                        }
+                        Player.STATE_READY -> {
+                            _playbackState.value =
+                                if (player.playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
+                            _errorMessage.value = null
+                        }
+                        Player.STATE_ENDED -> {
                             _playbackState.value = RadioPlaybackState.IDLE
+                        }
+                        Player.STATE_IDLE -> {
+                            if (_playbackState.value != RadioPlaybackState.ERROR) {
+                                _playbackState.value = RadioPlaybackState.IDLE
+                            }
                         }
                     }
                 }
-            }
 
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (player.playbackState == Player.STATE_READY) {
-                    _playbackState.value =
-                        if (playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
-                }
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
-                    _playbackState.value = RadioPlaybackState.PLAYING
-                } else if (_playbackState.value == RadioPlaybackState.PLAYING) {
-                    _playbackState.value = RadioPlaybackState.PAUSED
-                }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
-                _playbackState.value = RadioPlaybackState.ERROR
-                _errorMessage.value = toFriendlyMessage(error)
-            }
-        })
-
-        exoPlayer = player
-
-        // 创建 MediaSession 以接入系统媒体控制体系（锁屏/耳机按键/Quick Settings）
-        val sessionActivityIntent = PendingIntent.getActivity(
-            app,
-            0,
-            Intent(app, MainActivity::class.java).apply {
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_LAUNCHER)
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val sessionCallback = object : MediaSession.Callback {
-            override fun onConnect(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo
-            ): MediaSession.ConnectionResult {
-                val availableCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
-                    .add(Player.COMMAND_SEEK_TO_NEXT)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                    .build()
-                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                    .setAvailablePlayerCommands(availableCommands)
-                    .build()
-            }
-
-            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-            override fun onPlayerCommandRequest(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo,
-                playerCommand: Int
-            ): Int {
-                when (playerCommand) {
-                    Player.COMMAND_SEEK_TO_NEXT,
-                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
-                        skipNext()
-                        return SessionResult.RESULT_SUCCESS
-                    }
-                    Player.COMMAND_SEEK_TO_PREVIOUS,
-                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
-                        skipPrev()
-                        return SessionResult.RESULT_SUCCESS
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (player.playbackState == Player.STATE_READY) {
+                        _playbackState.value =
+                            if (playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
                     }
                 }
-                return super.onPlayerCommandRequest(session, controller, playerCommand)
-            }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying) {
+                        _playbackState.value = RadioPlaybackState.PLAYING
+                    } else if (_playbackState.value == RadioPlaybackState.PLAYING) {
+                        _playbackState.value = RadioPlaybackState.PAUSED
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
+                    _playbackState.value = RadioPlaybackState.ERROR
+                    _errorMessage.value = toFriendlyMessage(error)
+                }
+            })
+
+            exoPlayer = player
         }
 
-        mediaSession = MediaSession.Builder(app, player)
-            .setBitmapLoader(CoilBitmapLoader(app))
-            .setSessionActivity(sessionActivityIntent)
-            .setCallback(sessionCallback)
-            .build()
+        val player = exoPlayer ?: return
+
+        if (mediaSession == null) {
+            // 创建 MediaSession 以接入系统媒体控制体系（锁屏/耳机按键/Quick Settings）
+            val sessionActivityIntent = PendingIntent.getActivity(
+                app,
+                0,
+                Intent(app, MainActivity::class.java).apply {
+                    action = Intent.ACTION_MAIN
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val sessionCallback = object : MediaSession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo
+                ): MediaSession.ConnectionResult {
+                    val availableCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                        .add(Player.COMMAND_SEEK_TO_NEXT)
+                        .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                        .build()
+                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailablePlayerCommands(availableCommands)
+                        .build()
+                }
+
+                @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+                override fun onPlayerCommandRequest(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    playerCommand: Int
+                ): Int {
+                    when (playerCommand) {
+                        Player.COMMAND_SEEK_TO_NEXT,
+                        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                            skipNext()
+                            return SessionResult.RESULT_SUCCESS
+                        }
+                        Player.COMMAND_SEEK_TO_PREVIOUS,
+                        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                            skipPrev()
+                            return SessionResult.RESULT_SUCCESS
+                        }
+                    }
+                    return super.onPlayerCommandRequest(session, controller, playerCommand)
+                }
+            }
+
+            try {
+                mediaSession = MediaSession.Builder(app, player)
+                    .setId("RadioPlaybackSession")
+                    .setBitmapLoader(CoilBitmapLoader(app))
+                    .setSessionActivity(sessionActivityIntent)
+                    .setCallback(sessionCallback)
+                    .build()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize MediaSession for radio", e)
+            }
+        }
     }
 
     fun play(station: RadioStation) {
@@ -320,7 +330,24 @@ object RadioPlayerManager {
     }
 
     fun stop() {
-        exoPlayer?.stop()
+        try {
+            val player = exoPlayer
+            if (player != null) {
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                    player.stop()
+                } else {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            player.stop()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to stop ExoPlayer asynchronously", e)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to stop ExoPlayer", e)
+        }
         _playbackState.value = RadioPlaybackState.IDLE
         appContext?.let { ctx ->
             RadioPlaybackService.stop(ctx)
@@ -329,9 +356,17 @@ object RadioPlayerManager {
 
     fun release() {
         stop()
-        mediaSession?.release()
+        try {
+            mediaSession?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release MediaSession", e)
+        }
         mediaSession = null
-        exoPlayer?.release()
+        try {
+            exoPlayer?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release ExoPlayer", e)
+        }
         exoPlayer = null
     }
 

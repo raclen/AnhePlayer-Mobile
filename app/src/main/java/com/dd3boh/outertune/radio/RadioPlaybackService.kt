@@ -115,8 +115,12 @@ class RadioPlaybackService : Service() {
                 val notification = buildNotification(station, isPlaying = false, currentFaviconBitmap)
                 // 暂停时脱离强制前台，允许用户在通知栏划掉，但保留通知支持随时恢复播放
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-                val nm = getSystemService(NotificationManager::class.java)
-                nm?.notify(NOTIFICATION_ID, notification)
+                try {
+                    val nm = getSystemService(NotificationManager::class.java)
+                    nm?.notify(NOTIFICATION_ID, notification)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to post paused notification", e)
+                }
             }
             RadioPlaybackState.IDLE,
             RadioPlaybackState.ERROR -> {
@@ -290,9 +294,13 @@ class RadioPlaybackService : Service() {
         // 连接 MediaSession，激活系统媒体控制器（锁屏卡片、快捷控制等）
         val session = RadioPlayerManager.session
         if (session != null) {
-            val mediaStyle = MediaStyleNotificationHelper.MediaStyle(session)
-                .setShowActionsInCompactView(0, 1, 2)
-            builder.setStyle(mediaStyle)
+            try {
+                val mediaStyle = MediaStyleNotificationHelper.MediaStyle(session)
+                    .setShowActionsInCompactView(0, 1, 2)
+                builder.setStyle(mediaStyle)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to apply MediaStyle", e)
+            }
         }
 
         return builder.build()
