@@ -169,6 +169,7 @@ import com.dd3boh.outertune.ui.screens.settings.AttributionScreen
 import com.dd3boh.outertune.ui.screens.settings.EqualizerScreen
 import com.dd3boh.outertune.ui.screens.settings.LibrariesScreen
 import com.dd3boh.outertune.ui.screens.settings.LocalFoldersSettings
+import com.dd3boh.outertune.ui.screens.settings.LogSettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.LxSourceSettings
 import com.dd3boh.outertune.ui.screens.settings.RadioSettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.SettingsScreen
@@ -176,6 +177,7 @@ import com.dd3boh.outertune.ui.screens.settings.StorageSettings
 import com.dd3boh.outertune.ui.theme.OuterTuneTheme
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.ui.utils.appBarScrollBehavior
+import com.dd3boh.outertune.utils.AppLogManager
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.lmScannerCoroutine
 import com.dd3boh.outertune.utils.rememberEnumPreference
@@ -430,6 +432,21 @@ class MainActivity : ComponentActivity() {
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
+
+                // 闪退捕获提示：如果上次异常退出，提示用户可以前往日志排查并一键复制
+                LaunchedEffect(Unit) {
+                    if (AppLogManager.hasCrashLog()) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "检测到应用上次异常退出，可查看并复制错误日志",
+                            actionLabel = "查看日志",
+                            withDismissAction = true,
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            navController.navigate("settings/log")
+                        }
+                    }
+                }
 
                 val tabOpenedFromShortcut = remember {
                     // reroute to library page for new layout is handled in NavHost section
@@ -722,6 +739,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                     composable("settings/local/folders") {
                                         LocalFoldersSettings(navController, scrollBehavior)
+                                    }
+                                    composable("settings/log") {
+                                        LogSettingsScreen(navController, scrollBehavior)
                                     }
                                     composable("settings/about") {
                                         AboutScreen(navController, scrollBehavior, appUpdateViewModel)

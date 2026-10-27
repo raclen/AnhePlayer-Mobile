@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Radio
@@ -29,14 +31,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.dd3boh.outertune.BuildConfig
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
+import com.dd3boh.outertune.utils.AppLogManager
 
 /**
  * 设置首页
@@ -103,6 +108,27 @@ fun SettingsScreen(
                 description = stringResource(R.string.equalizer),
                 icon = { Icon(Icons.Rounded.GraphicEq, null) },
                 onClick = { navController.navigate("settings/equalizer") }
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PreferenceGroupTitle(title = "诊断与支持")
+
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val hasCrash = remember { AppLogManager.hasCrashLog() }
+            PreferenceEntry(
+                title = { Text("日志与错误排查") },
+                description = if (hasCrash) "检测到上次闪退崩溃记录，点击查看与复制" else "查看/复制近期运行日志与设备信息",
+                icon = { Icon(Icons.Rounded.BugReport, null) },
+                onClick = { navController.navigate("settings/log") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.about)) },
+                description = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                icon = { Icon(Icons.Rounded.Info, null) },
+                onClick = { navController.navigate("settings/about") }
             )
         }
         Spacer(modifier = Modifier.height(96.dp))

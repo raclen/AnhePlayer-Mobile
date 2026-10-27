@@ -170,6 +170,12 @@ fun AboutScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 PreferenceEntry(
+                    title = { Text("日志与错误排查") },
+                    onClick = {
+                        navController.navigate("settings/log")
+                    }
+                )
+                PreferenceEntry(
                     title = { Text(stringResource(R.string.attribution_title)) },
                     onClick = {
                         navController.navigate("settings/about/attribution")

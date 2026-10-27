@@ -42,6 +42,7 @@ val playerCoroutine = newFixedThreadPoolContext(4, "player_service_offload")
 
 fun reportException(throwable: Throwable) {
     throwable.printStackTrace()
+    AppLogManager.recordNonFatal(throwable)
 }
 
 /**

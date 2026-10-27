@@ -25,12 +25,14 @@ import com.dd3boh.outertune.utils.LocalArtworkPathKeyer
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.source.lx.LxSourceRuntime
+import com.dd3boh.outertune.utils.AppLogManager
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class App : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
+        AppLogManager.install(this)
         LxSourceRuntime.initialize(this)
 
         if (BuildConfig.DEBUG) {

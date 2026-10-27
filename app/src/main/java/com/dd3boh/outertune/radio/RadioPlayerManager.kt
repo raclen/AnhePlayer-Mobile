@@ -22,6 +22,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionResult
 import com.dd3boh.outertune.MainActivity
 import com.dd3boh.outertune.constants.RadioLastStationUuidKey
+import com.dd3boh.outertune.utils.AppLogManager
 import com.dd3boh.outertune.utils.CoilBitmapLoader
 import com.dd3boh.outertune.utils.dataStore
 import kotlinx.coroutines.CoroutineScope
@@ -170,6 +171,7 @@ object RadioPlayerManager {
 
                 override fun onPlayerError(error: PlaybackException) {
                     Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
+                    AppLogManager.e(TAG, "Radio player error: ${error.errorCodeName} - ${error.message}", error)
                     _playbackState.value = RadioPlaybackState.ERROR
                     _errorMessage.value = toFriendlyMessage(error)
                 }
@@ -244,6 +246,7 @@ object RadioPlayerManager {
     }
 
     fun play(station: RadioStation) {
+        AppLogManager.i(TAG, "Play station: ${station.name} (${station.playUrl})")
         val player = exoPlayer ?: return
         val url = station.playUrl
         if (url.isBlank()) {
