@@ -49,6 +49,9 @@ val RadioCountryKey = stringPreferencesKey("radioCountry")
 val RadioLanguageKey = stringPreferencesKey("radioLanguage")
 val RadioLastStationUuidKey = stringPreferencesKey("radioLastStationUuid")
 val RadioFavoritesKey = androidx.datastore.preferences.core.stringSetPreferencesKey("radioFavoriteUuids")
+val RadioWakeLockKey = booleanPreferencesKey("radioWakeLock")
+val RadioAutoReconnectKey = booleanPreferencesKey("radioAutoReconnect")
+val RadioKeepAliveOnTaskClearKey = booleanPreferencesKey("radioKeepAliveOnTaskClear")
 
 
 

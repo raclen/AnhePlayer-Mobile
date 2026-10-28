@@ -16,17 +16,22 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionResult
 import com.dd3boh.outertune.MainActivity
+import com.dd3boh.outertune.constants.RadioAutoReconnectKey
 import com.dd3boh.outertune.constants.RadioLastStationUuidKey
 import com.dd3boh.outertune.utils.AppLogManager
 import com.dd3boh.outertune.utils.CoilBitmapLoader
 import com.dd3boh.outertune.utils.dataStore
+import com.dd3boh.outertune.utils.get
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +81,11 @@ object RadioPlayerManager {
     private var stationList: List<RadioStation> = emptyList()
     private var currentIndex: Int = -1
 
+    private var retryCount = 0
+    private const val MAX_RETRIES = 5
+    private var retryJob: Job? = null
+    private var stallWatchdogJob: Job? = null
+
     fun updateStationList(list: List<RadioStation>, index: Int) {
         stationList = list
         currentIndex = index
@@ -112,8 +122,10 @@ object RadioPlayerManager {
                 .build()
 
             val httpClient = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(45, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
                 .followRedirects(true)
                 .followSslRedirects(true)
                 .build()
@@ -124,8 +136,19 @@ object RadioPlayerManager {
             val dataSourceFactory = DefaultDataSource.Factory(app, okHttpDataSourceFactory)
             val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
+            val loadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ 15_000,
+                    /* maxBufferMs = */ 60_000,
+                    /* bufferForPlaybackMs = */ 1_500,
+                    /* bufferForPlaybackAfterRebufferMs = */ 3_000
+                )
+                .setBackBuffer(10_000, true)
+                .build()
+
             val player = ExoPlayer.Builder(app)
                 .setMediaSourceFactory(mediaSourceFactory)
+                .setLoadControl(loadControl)
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -137,16 +160,25 @@ object RadioPlayerManager {
                         Player.STATE_BUFFERING -> {
                             _playbackState.value = RadioPlaybackState.BUFFERING
                             _errorMessage.value = null
+                            startStallWatchdog()
                         }
                         Player.STATE_READY -> {
-                            _playbackState.value =
-                                if (player.playWhenReady) RadioPlaybackState.PLAYING else RadioPlaybackState.PAUSED
+                            stopStallWatchdog()
+                            if (player.playWhenReady) {
+                                _playbackState.value = RadioPlaybackState.PLAYING
+                                retryCount = 0
+                                retryJob?.cancel()
+                            } else {
+                                _playbackState.value = RadioPlaybackState.PAUSED
+                            }
                             _errorMessage.value = null
                         }
                         Player.STATE_ENDED -> {
+                            stopStallWatchdog()
                             _playbackState.value = RadioPlaybackState.IDLE
                         }
                         Player.STATE_IDLE -> {
+                            stopStallWatchdog()
                             if (_playbackState.value != RadioPlaybackState.ERROR) {
                                 _playbackState.value = RadioPlaybackState.IDLE
                             }
@@ -172,8 +204,7 @@ object RadioPlayerManager {
                 override fun onPlayerError(error: PlaybackException) {
                     Log.e(TAG, "Radio player error: ${error.errorCodeName}", error)
                     AppLogManager.e(TAG, "Radio player error: ${error.errorCodeName} - ${error.message}", error)
-                    _playbackState.value = RadioPlaybackState.ERROR
-                    _errorMessage.value = toFriendlyMessage(error)
+                    handlePlaybackError(error)
                 }
             })
 
@@ -245,8 +276,15 @@ object RadioPlayerManager {
         }
     }
 
-    fun play(station: RadioStation) {
-        AppLogManager.i(TAG, "Play station: ${station.name} (${station.playUrl})")
+    fun play(station: RadioStation, isRetry: Boolean = false) {
+        if (!isRetry) {
+            retryCount = 0
+            retryJob?.cancel()
+            stopStallWatchdog()
+            AppLogManager.i(TAG, "Play station: ${station.name} (${station.playUrl})")
+        } else {
+            AppLogManager.i(TAG, "Reconnecting station: ${station.name} (${station.playUrl}), attempt: $retryCount")
+        }
         val player = exoPlayer ?: return
         val url = station.playUrl
         if (url.isBlank()) {
@@ -257,7 +295,9 @@ object RadioPlayerManager {
 
         _currentStation.value = station
         _playbackState.value = RadioPlaybackState.BUFFERING
-        _errorMessage.value = null
+        if (!isRetry) {
+            _errorMessage.value = null
+        }
 
         // 启动前台服务，保持后台运行与通知栏控制，避免约 3 分钟后被系统终止
         appContext?.let { ctx ->
@@ -329,10 +369,15 @@ object RadioPlayerManager {
     }
 
     fun pause() {
+        retryJob?.cancel()
+        stopStallWatchdog()
         exoPlayer?.pause()
     }
 
     fun stop() {
+        retryJob?.cancel()
+        stopStallWatchdog()
+        retryCount = 0
         try {
             val player = exoPlayer
             if (player != null) {
@@ -359,6 +404,8 @@ object RadioPlayerManager {
 
     fun release() {
         stop()
+        retryJob?.cancel()
+        stopStallWatchdog()
         try {
             mediaSession?.release()
         } catch (e: Exception) {
@@ -371,6 +418,57 @@ object RadioPlayerManager {
             Log.w(TAG, "Failed to release ExoPlayer", e)
         }
         exoPlayer = null
+    }
+
+    private fun handlePlaybackError(error: PlaybackException) {
+        stopStallWatchdog()
+        val station = _currentStation.value
+        val canRetry = appContext?.dataStore?.get(RadioAutoReconnectKey, true) ?: true
+        if (canRetry && station != null && retryCount < MAX_RETRIES) {
+            retryCount++
+            val delayMs = when (retryCount) {
+                1 -> 1500L
+                2 -> 3000L
+                3 -> 6000L
+                4 -> 10000L
+                else -> 15000L
+            }
+            AppLogManager.w(TAG, "Radio player error: ${error.errorCodeName}. Auto-retrying in ${delayMs}ms (attempt $retryCount/$MAX_RETRIES)...")
+            _playbackState.value = RadioPlaybackState.BUFFERING
+            _errorMessage.value = "网络中断，正在尝试重连 ($retryCount/$MAX_RETRIES)..."
+            retryJob?.cancel()
+            retryJob = CoroutineScope(Dispatchers.Main).launch {
+                delay(delayMs)
+                if (_currentStation.value?.stationUuid == station.stationUuid) {
+                    play(station, isRetry = true)
+                }
+            }
+        } else {
+            _playbackState.value = RadioPlaybackState.ERROR
+            _errorMessage.value = toFriendlyMessage(error)
+        }
+    }
+
+    private fun startStallWatchdog() {
+        stallWatchdogJob?.cancel()
+        val station = _currentStation.value ?: return
+        val canRetry = appContext?.dataStore?.get(RadioAutoReconnectKey, true) ?: true
+        if (!canRetry) return
+
+        stallWatchdogJob = CoroutineScope(Dispatchers.Main).launch {
+            // 处于缓冲状态持续超过 25 秒，通常说明底层 TCP socket 已假死（如息屏断网或弱网挂起）
+            delay(25_000L)
+            if (_playbackState.value == RadioPlaybackState.BUFFERING && exoPlayer?.playWhenReady == true) {
+                AppLogManager.w(TAG, "Radio buffering stalled for 25s, recovering connection...")
+                _errorMessage.value = "缓冲超时，正在重连..."
+                play(station, isRetry = true)
+            }
+        }
+    }
+
+    private fun stopStallWatchdog() {
+        stallWatchdogJob?.cancel()
+        stallWatchdogJob = null
     }
 
     /** 把底层异常翻译成用户能看懂的中文提示 */

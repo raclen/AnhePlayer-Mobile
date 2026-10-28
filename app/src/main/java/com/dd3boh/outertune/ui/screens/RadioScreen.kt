@@ -488,7 +488,18 @@ private fun RadioHeroCard(
                 }
             }
 
-            if (playbackState == RadioPlaybackState.ERROR) {
+            if (playbackState == RadioPlaybackState.BUFFERING && !errorMessage.isNullOrBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            } else if (playbackState == RadioPlaybackState.ERROR) {
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = errorMessage ?: "播放失败，轻触重试",

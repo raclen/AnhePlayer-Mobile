@@ -238,6 +238,11 @@ object AppLogManager {
             appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.BRAND} ${Build.PRODUCT})")
             appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}, Build ${Build.ID})")
             appendLine("架构: ${Build.SUPPORTED_ABIS.joinToString(", ")}")
+            val ctx = appContext
+            if (ctx != null) {
+                val isIgnoring = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(ctx)
+                appendLine("电池优化无限制状态: ${if (isIgnoring) "已开启 (推荐)" else "未开启 (受系统省电策略限制)"}")
+            }
         }
     }
 }

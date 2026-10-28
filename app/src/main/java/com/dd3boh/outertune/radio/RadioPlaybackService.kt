@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -23,13 +25,17 @@ import coil3.toBitmap
 import com.dd3boh.outertune.MainActivity
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.KeepAliveKey
+import com.dd3boh.outertune.constants.RadioKeepAliveOnTaskClearKey
+import com.dd3boh.outertune.constants.RadioWakeLockKey
 import com.dd3boh.outertune.constants.StopMusicOnTaskClearKey
+import com.dd3boh.outertune.utils.AppLogManager
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,6 +56,55 @@ class RadioPlaybackService : Service() {
 
     private var currentFaviconUrl: String? = null
     private var currentFaviconBitmap: Bitmap? = null
+
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
+    private fun acquireLocks() {
+        val enabled = dataStore.get(RadioWakeLockKey, true)
+        if (!enabled) return
+
+        try {
+            if (wakeLock == null) {
+                val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OuterTune:RadioWakeLock")?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wakeLock?.acquire(24 * 60 * 60 * 1000L) // 24小时防休眠保护
+
+            if (wifiLock == null) {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                @Suppress("DEPRECATION")
+                val lockType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                } else {
+                    WifiManager.WIFI_MODE_FULL
+                }
+                wifiLock = wm?.createWifiLock(lockType, "OuterTune:RadioWifiLock")?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wifiLock?.acquire()
+            Log.d(TAG, "WakeLock and WifiLock acquired")
+        } catch (e: Exception) {
+            AppLogManager.e(TAG, "Failed to acquire WakeLock/WifiLock", e)
+        }
+    }
+
+    private fun releaseLocks() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
+            }
+            Log.d(TAG, "WakeLock and WifiLock released")
+        } catch (e: Exception) {
+            AppLogManager.e(TAG, "Failed to release WakeLock/WifiLock", e)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -100,18 +155,23 @@ class RadioPlaybackService : Service() {
             }
         }
 
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun handlePlaybackStateUpdate(station: RadioStation?, state: RadioPlaybackState) {
         when (state) {
             RadioPlaybackState.BUFFERING,
             RadioPlaybackState.PLAYING -> {
+                acquireLocks()
                 val isPlaying = (state == RadioPlaybackState.PLAYING)
-                ensureForegroundNotification(station, isPlaying)
+                val overrideText = if (state == RadioPlaybackState.BUFFERING) {
+                    RadioPlayerManager.errorMessage.value ?: "正在缓冲/连接..."
+                } else null
+                ensureForegroundNotification(station, isPlaying, overrideText)
                 loadFaviconIfNeeded(station, isPlaying)
             }
             RadioPlaybackState.PAUSED -> {
+                releaseLocks()
                 val notification = buildNotification(station, isPlaying = false, currentFaviconBitmap)
                 // 暂停时脱离强制前台，允许用户在通知栏划掉，但保留通知支持随时恢复播放
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
@@ -122,15 +182,33 @@ class RadioPlaybackService : Service() {
                     Log.w(TAG, "Failed to post paused notification", e)
                 }
             }
-            RadioPlaybackState.IDLE,
-            RadioPlaybackState.ERROR -> {
+            RadioPlaybackState.IDLE -> {
+                releaseLocks()
                 stopForegroundAndSelf()
+            }
+            RadioPlaybackState.ERROR -> {
+                releaseLocks()
+                val errorMsg = RadioPlayerManager.errorMessage.value ?: "播放中断"
+                val notification = buildNotification(station, isPlaying = false, currentFaviconBitmap, overrideText = errorMsg)
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+                try {
+                    val nm = getSystemService(NotificationManager::class.java)
+                    nm?.notify(NOTIFICATION_ID, notification)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to post error notification", e)
+                }
+                scope.launch {
+                    delay(30_000L)
+                    if (RadioPlayerManager.playbackState.value == RadioPlaybackState.ERROR) {
+                        stopForegroundAndSelf()
+                    }
+                }
             }
         }
     }
 
-    private fun ensureForegroundNotification(station: RadioStation?, isPlaying: Boolean) {
-        val notification = buildNotification(station, isPlaying, currentFaviconBitmap)
+    private fun ensureForegroundNotification(station: RadioStation?, isPlaying: Boolean, overrideText: String? = null) {
+        val notification = buildNotification(station, isPlaying, currentFaviconBitmap, overrideText)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(
@@ -183,10 +261,11 @@ class RadioPlaybackService : Service() {
     private fun buildNotification(
         station: RadioStation?,
         isPlaying: Boolean,
-        largeIcon: Bitmap?
+        largeIcon: Bitmap?,
+        overrideText: String? = null
     ): Notification {
         val title = station?.displayTitle ?: getString(R.string.radio)
-        val text = buildString {
+        val text = overrideText ?: buildString {
             val subtitle = station?.displaySubtitle
             val extra = station?.displayCodecAndBitrate
             if (!subtitle.isNullOrBlank()) {
@@ -247,6 +326,7 @@ class RadioPlaybackService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val isBuffering = (RadioPlayerManager.playbackState.value == RadioPlaybackState.BUFFERING)
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -254,7 +334,7 @@ class RadioPlaybackService : Service() {
             .setContentIntent(contentIntent)
             .setDeleteIntent(stopIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(isPlaying)
+            .setOngoing(isPlaying || isBuffering)
             .setOnlyAlertOnce(true)
 
         if (largeIcon != null) {
@@ -331,7 +411,11 @@ class RadioPlaybackService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         Log.i(TAG, "onTaskRemoved")
-        val shouldStop = dataStore.get(StopMusicOnTaskClearKey, true) && !dataStore.get(KeepAliveKey, false)
+        val keepAliveOnClear = dataStore.get(RadioKeepAliveOnTaskClearKey, true)
+        val globalKeepAlive = dataStore.get(KeepAliveKey, false)
+        val isMusicStopOnClear = dataStore.get(StopMusicOnTaskClearKey, true)
+
+        val shouldStop = !keepAliveOnClear && isMusicStopOnClear && !globalKeepAlive
         if (shouldStop) {
             RadioPlayerManager.stop()
             stopForegroundAndSelf()
@@ -340,6 +424,7 @@ class RadioPlaybackService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        releaseLocks()
         serviceJob.cancel()
         stopForegroundAndSelf()
     }
