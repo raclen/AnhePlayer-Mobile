@@ -149,13 +149,16 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
   const events = {
     request: null,
   }
-  const allSources = ['kw', 'kg', 'tx', 'wy', 'mg', 'local']
+  const allSources = ['kw', 'kg', 'tx', 'wy', 'mg', 'qs', 'qishui', 'local']
+  let declaredSources = {}
   const supportQualitys = {
     kw: ['128k', '320k', 'flac', 'flac24bit'],
     kg: ['128k', '320k', 'flac', 'flac24bit'],
     tx: ['128k', '320k', 'flac', 'flac24bit'],
     wy: ['128k', '320k', 'flac', 'flac24bit'],
     mg: ['128k', '320k', 'flac', 'flac24bit'],
+    qs: ['128k', '320k', 'flac', 'flac24bit'],
+    qishui: ['128k', '320k', 'flac', 'flac24bit'],
     local: [],
   }
   const supportActions = {
@@ -166,6 +169,8 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
     wy: ['musicUrl', 'lyric', 'pic'],
     mg: ['musicUrl', 'lyric', 'pic'],
     xm: ['musicUrl', 'lyric', 'pic'],
+    qs: ['musicUrl', 'lyric', 'pic'],
+    qishui: ['musicUrl', 'lyric', 'pic'],
     local: ['musicUrl', 'lyric', 'pic'],
   }
 
@@ -219,7 +224,17 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
     // console.log(data)
     if (!events.request) return nativeCall(NATIVE_EVENTS_NAMES.response, { requestKey, status: false, errorMessage: 'Request event is not defined' })
     try {
-      events.request.call(globalThis.lx, { source: data.source, action: data.action, info: data.info }).then(response => {
+      // 队列持久化使用 qs，调用时按当前脚本声明兼容 qs / qishui，内外层来源保持一致。
+      let source = data.source
+      const alias = source === 'qs' ? 'qishui' : source === 'qishui' ? 'qs' : null
+      if (alias && !declaredSources[source] && declaredSources[alias]) source = alias
+      let info = data.info
+      if (alias) {
+        info = data.action === 'musicUrl'
+          ? { ...info, musicInfo: { ...info.musicInfo, source } }
+          : { ...info, source }
+      }
+      events.request.call(globalThis.lx, { source, action: data.action, info }).then(response => {
         let result
         switch (data.action) {
           case 'musicUrl':
@@ -245,7 +260,7 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
             result = {
               source: data.source,
               action: data.action,
-              data: response,
+              data: { url: response },
             }
             break
         }
@@ -333,6 +348,7 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
       nativeCall(NATIVE_EVENTS_NAMES.init, { info: null, status: false, errorMessage: error.message })
       return
     }
+    declaredSources = sourceInfo.sources
     nativeCall(NATIVE_EVENTS_NAMES.init, { info: sourceInfo, status: true })
   }
   const handleShowUpdateAlert = (data, resolve, reject) => {

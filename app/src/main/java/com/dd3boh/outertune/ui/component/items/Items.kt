@@ -338,7 +338,7 @@ fun MediaMetadataListItem(
         } else if (showInLibraryIcon && mediaMetadata.inLibrary != null) {
             Icon.Library()
         }
-        if (showDownloadIcon && !mediaMetadata.isLocal) {
+        if (showDownloadIcon && com.dd3boh.outertune.source.SourceCapabilities.canDownload(mediaMetadata)) {
             val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id).collectAsState(initial = null)
             Icon.Download(download)
         }

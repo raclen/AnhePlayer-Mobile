@@ -197,7 +197,7 @@ fun AlbumMenu(
                 }
             }
         }
-        if (album.album.isLocal == false) {
+        if (songs.any { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it.song.source, it.song.isLocal) }) {
             DownloadGridMenu(
                 state = downloadState,
                 onDownload = {

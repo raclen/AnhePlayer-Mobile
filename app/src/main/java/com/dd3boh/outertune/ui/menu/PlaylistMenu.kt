@@ -233,7 +233,7 @@ fun PlaylistMenu(
             showChoosePlaylistDialog = true
         }
 
-        if (songs.fastAny { !it.song.isLocal }) {
+        if (songs.fastAny { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it.song.source, it.song.isLocal) }) {
             DownloadGridMenu(
                 state = downloadState,
                 onDownload = {

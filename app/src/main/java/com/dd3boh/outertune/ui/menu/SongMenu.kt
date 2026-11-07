@@ -211,7 +211,7 @@ fun SongMenu(
             }
         }
 
-        if (!song.song.isLocal)
+        if (com.dd3boh.outertune.source.SourceCapabilities.canDownload(song.song.source, song.song.isLocal))
             DownloadGridMenu(
                 localDateTime = download,
                 onDownload = {

@@ -79,7 +79,7 @@ object LxSourceRuntime {
         ensureLoaded(script)
 
         val source = metadata.source ?: error("歌曲缺少洛雪来源信息")
-        val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject }
+        val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject.toScriptMusicInfo() }
             ?: error("歌曲缺少洛雪音源参数")
         val requestedQuality = qualityOverride ?: appContext.dataStore.get(LxSourceQualityKey, DEFAULT_QUALITY)
         val quality = selectSupportedQuality(musicInfo, requestedQuality)
@@ -145,7 +145,7 @@ object LxSourceRuntime {
         return try {
             if (!::appContext.isInitialized) return null
             val source = metadata.source ?: return null
-            val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject } ?: return null
+            val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject.toScriptMusicInfo() } ?: return null
 
             val script = appContext.dataStore[LxSourceScriptKey]
                 ?.takeIf(String::isNotBlank)

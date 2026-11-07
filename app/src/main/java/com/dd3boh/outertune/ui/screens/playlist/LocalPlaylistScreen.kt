@@ -695,7 +695,7 @@ fun LocalPlaylistHeader(
                     }
 
                     if (songs.any { !it.song.song.isLocal }) {
-                        when (downloadState) {
+                        if (songs.any { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it.song.song.source, it.song.song.isLocal) }) when (downloadState) {
                             Download.STATE_COMPLETED -> {
                                 IconButton(
                                     onClick = onShowRemoveDownloadDialog

@@ -234,6 +234,7 @@ class MainActivity : ComponentActivity() {
         isActivityResumed = true
         observeAudioPermission(checkSelfPermission(MEDIA_PERMISSION_LEVEL) == PackageManager.PERMISSION_GRANTED)
         appUpdateViewModel.checkAutomatically()
+        com.dd3boh.outertune.source.kugou.KugouConcept.onForeground()
     }
 
     override fun onPause() {
@@ -393,12 +394,12 @@ class MainActivity : ComponentActivity() {
 
                     val result = snackbarHostState.showSnackbar(
                         message = message,
-                        actionLabel = getString(R.string.download_retry),
+                        actionLabel = getString(R.string.download_retry).takeIf { failures.any { it.retryable } },
                         withDismissAction = true,
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        failures.forEach { downloadUtil.retryFailedDownload(it.songId) }
+                        failures.filter { it.retryable }.forEach { downloadUtil.retryFailedDownload(it.songId) }
                     }
                 }
             }
@@ -625,6 +626,24 @@ class MainActivity : ComponentActivity() {
                                     }
                                     composable(Screens.Playlists.route) {
                                         LibraryPlaylistsScreen(navController)
+                                    }
+                                    composable(Screens.Kugou.route) {
+                                        com.dd3boh.outertune.ui.screens.kugou.KugouHomeScreen(navController, scrollBehavior)
+                                    }
+                                    composable("kugou/search") {
+                                        com.dd3boh.outertune.ui.screens.kugou.KugouSearchScreen(navController, scrollBehavior)
+                                    }
+                                    composable("kugou/browse/{kind}", arguments = listOf(navArgument("kind") { type = NavType.StringType })) {
+                                        com.dd3boh.outertune.ui.screens.kugou.KugouBrowseScreen(navController, scrollBehavior)
+                                    }
+                                    composable("kugou/collection/{type}/{id}", arguments = listOf(
+                                        navArgument("type") { type = NavType.StringType },
+                                        navArgument("id") { type = NavType.StringType },
+                                    )) {
+                                        com.dd3boh.outertune.ui.screens.kugou.KugouCollectionScreen(navController, scrollBehavior)
+                                    }
+                                    composable("settings/kugou") {
+                                        com.dd3boh.outertune.ui.screens.kugou.KugouAccountScreen(navController, scrollBehavior)
                                     }
                                     composable(Screens.Radio.route) {
                                         RadioScreen(navController, scrollBehavior)
@@ -987,7 +1006,7 @@ class MainActivity : ComponentActivity() {
                                             coroutineScope.launch { drawerState.open() }
                                         },
                                         onSearch = {
-                                            navController.navigate("search") {
+                                            navController.navigate(if (navBackStackEntry?.destination?.route == Screens.Kugou.route) "kugou/search" else "search") {
                                                 launchSingleTop = true
                                             }
                                         },

@@ -207,6 +207,15 @@ class MusicService : MediaLibraryService(),
 
     var consecutivePlaybackErr = 0
 
+    private data class ConceptStreamCache(
+        val version: Long,
+        val stream: com.dd3boh.outertune.source.kugou.KugouResolvedStream,
+        val candidate: Int = 0,
+    )
+    private val conceptStreams = java.util.concurrent.ConcurrentHashMap<String, ConceptStreamCache>()
+    private val conceptRetries = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private var previousTransitionId: String? = null
+
     override fun onCreate() {
         Log.i(TAG, "Starting MusicService")
         super.onCreate()
@@ -262,6 +271,30 @@ class MusicService : MediaLibraryService(),
             .build()
 
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
+
+        scope.launch {
+            val initialAccount = com.dd3boh.outertune.source.kugou.KugouConcept.accountState.value
+            var previousAccount: String? = initialAccount.userId
+            var restoredAccountObserved = initialAccount.status != com.dd3boh.outertune.source.kugou.KugouAccountStatus.RESTORING
+            com.dd3boh.outertune.source.kugou.KugouConcept.accountState.collect { account ->
+                if (account.status != com.dd3boh.outertune.source.kugou.KugouAccountStatus.RESTORING) {
+                    if (restoredAccountObserved && previousAccount != account.userId) {
+                        conceptStreams.clear()
+                        conceptRetries.clear()
+                        if (com.dd3boh.outertune.source.SourceCapabilities.isConcept(currentMediaMetadata.value?.source)) {
+                            player.stop()
+                        }
+                    }
+                    if (account.status == com.dd3boh.outertune.source.kugou.KugouAccountStatus.EXPIRED &&
+                        com.dd3boh.outertune.source.SourceCapabilities.isConcept(currentMediaMetadata.value?.source)) {
+                        conceptStreams.clear()
+                        player.stop()
+                    }
+                    previousAccount = account.userId
+                    restoredAccountObserved = true
+                }
+            }
+        }
 
         // 应用内均衡器：绑定播放器音频会话，设置变化由 DataStore 驱动
         equalizerController = EqualizerController(this, player, scope)
@@ -614,13 +647,43 @@ class MusicService : MediaLibraryService(),
 
     private fun createDataSourceFactory(): DataSource.Factory {
         val songUrlCache = HashMap<String, Pair<String, Long>>()
-        return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
+        val cacheFactory = createCacheDataSource()
+        val onlineFactory = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(OkHttpClient.Builder().build()))
+        val routingFactory = DataSource.Factory {
+            KugouRoutingDataSource(cacheFactory.createDataSource(), onlineFactory.createDataSource())
+        }
+        return ResolvingDataSource.Factory(routingFactory) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
             Log.d(TAG, "PLAYING: song id = $mediaId")
 
             var song = queueBoard.value.getCurrentQueue()?.findSong(dataSpec.key ?: "")
             if (song == null) { // in the case of resumption, queueBoard may not be ready yet
                 song = runBlocking { database.song(dataSpec.key).first()?.toMediaMetadata() }
+            }
+            if (com.dd3boh.outertune.source.SourceCapabilities.isConcept(song?.source)) {
+                val conceptSong = checkNotNull(song)
+                check(mediaId.startsWith(com.dd3boh.outertune.source.kugou.KUGOU_CONCEPT_ID_PREFIX)) { "概念版歌曲标识不正确" }
+                runBlocking(Dispatchers.IO) { com.dd3boh.outertune.source.kugou.KugouConcept.awaitRestored() }
+                val account = com.dd3boh.outertune.source.kugou.KugouConcept.accountState.value
+                check(account.status == com.dd3boh.outertune.source.kugou.KugouAccountStatus.SIGNED_IN) { "请前往设置登录酷狗账号" }
+                val version = com.dd3boh.outertune.source.kugou.KugouConcept.sessionVersion.value
+                val existing = conceptStreams[mediaId]?.takeIf {
+                    it.version == version && it.stream.expiresAt > System.currentTimeMillis() + 10_000
+                }
+                val cached = existing ?: runBlocking(Dispatchers.IO) {
+                    val stream = com.dd3boh.outertune.source.kugou.KugouConcept.resolveStream(conceptSong)
+                    if (stream.access == com.dd3boh.outertune.source.kugou.KugouPlaybackAccess.PREVIEW) {
+                        scope.launch(Dispatchers.Main) {
+                            if (stream.sessionVersion == com.dd3boh.outertune.source.kugou.KugouConcept.sessionVersion.value) {
+                                Toast.makeText(this@MusicService, "这首歌当前仅有试听权限", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                    ConceptStreamCache(stream.sessionVersion, stream)
+                }.also { conceptStreams[mediaId] = it }
+                check(cached.version == com.dd3boh.outertune.source.kugou.KugouConcept.sessionVersion.value) { "酷狗账号已变化，请重新播放" }
+                return@Factory dataSpec.buildUpon().setUri(cached.stream.urls[cached.candidate])
+                    .setHttpRequestHeaders(cached.stream.headers).build()
             }
             downloadUtil.localMgr.getFilePathIfExists(mediaId)?.let { downloadedFile ->
                 Log.d(TAG, "PLAYING: downloaded file")
@@ -660,7 +723,7 @@ class MusicService : MediaLibraryService(),
 
             if (song?.source != null) {
                 val streamUrl = runBlocking(Dispatchers.IO) {
-                    LxSourceRuntime.resolve(song)
+                    com.dd3boh.outertune.source.SourceResolver.resolve(song)
                 }
                 songUrlCache[mediaId] = streamUrl to System.currentTimeMillis() + 30 * 60 * 1000L
                 return@Factory dataSpec.withUri(streamUrl.toUri())
@@ -815,6 +878,24 @@ class MusicService : MediaLibraryService(),
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
 
+        val conceptId = currentMediaMetadata.value?.takeIf {
+            com.dd3boh.outertune.source.SourceCapabilities.isConcept(it.source)
+        }?.id
+        if (conceptId != null && error.errorCode in 2000..2999) {
+            val cached = conceptStreams[conceptId]
+            val attempts = conceptRetries[conceptId] ?: 0
+            if (cached != null && attempts < 2 && isNetworkConnected.value &&
+                com.dd3boh.outertune.source.kugou.KugouConcept.accountState.value.status == com.dd3boh.outertune.source.kugou.KugouAccountStatus.SIGNED_IN) {
+                conceptRetries[conceptId] = attempts + 1
+                if (cached.candidate + 1 < cached.stream.urls.size) {
+                    conceptStreams[conceptId] = cached.copy(candidate = cached.candidate + 1)
+                } else conceptStreams.remove(conceptId)
+                player.prepare()
+                player.play()
+                return
+            }
+        }
+
         // wait for reconnection
         val isConnectionError = (error.cause?.cause is PlaybackException)
                 && (error.cause?.cause as PlaybackException).errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
@@ -829,9 +910,11 @@ class MusicService : MediaLibraryService(),
             stopOnError()
         }
 
+        if (conceptId != null) conceptStreams.remove(conceptId)
         Toast.makeText(
             this@MusicService,
-            "plr: ${error.message} (${error.errorCode}): ${error.cause?.message ?: ""} ",
+            if (conceptId != null) "酷狗播放失败（${error.errorCode}），请检查账号、网络或歌曲权限"
+            else "plr: ${error.message} (${error.errorCode}): ${error.cause?.message ?: ""} ",
             Toast.LENGTH_LONG
         ).show()
     }
@@ -847,6 +930,10 @@ class MusicService : MediaLibraryService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
+        if (mediaItem?.mediaId != previousTransitionId) {
+            mediaItem?.mediaId?.let { conceptRetries.remove(it) }
+            previousTransitionId = mediaItem?.mediaId
+        }
         // +2 when and error happens, and -1 when transition. Thus when error, number increments by 1, else doesn't change
         if (consecutivePlaybackErr > 0) {
             consecutivePlaybackErr--

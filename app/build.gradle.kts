@@ -30,8 +30,8 @@ android {
         applicationId = "com.dd3boh.outertune"
         minSdk = 24
         targetSdk = 36
-        versionCode = 217
-        versionName = "2.0.17"
+        versionCode = 218
+        versionName = "2.0.18"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -281,6 +281,8 @@ dependencies {
     implementation(libs.media3.okhttp)
     implementation(libs.media3.session)
     implementation(libs.media3.workmanager)
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)

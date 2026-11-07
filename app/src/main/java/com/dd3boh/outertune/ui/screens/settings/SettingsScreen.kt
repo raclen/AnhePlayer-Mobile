@@ -73,6 +73,12 @@ fun SettingsScreen(
                 onClick = { navController.navigate("settings/lx_source") }
             )
             PreferenceEntry(
+                title = { Text("酷狗账号") },
+                description = "概念版登录、每日自动领取 VIP",
+                icon = { Icon(Icons.Rounded.MusicNote, null) },
+                onClick = { navController.navigate("settings/kugou") },
+            )
+            PreferenceEntry(
                 title = { Text("电台设置") },
                 description = "码率、国家地区与语言筛选",
                 icon = { Icon(Icons.Rounded.Radio, null) },

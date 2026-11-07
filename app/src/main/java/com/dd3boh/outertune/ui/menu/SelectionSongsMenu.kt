@@ -208,7 +208,7 @@ fun SelectionMediaMetadataMenu(
             }
         }
 
-        DownloadGridMenu(
+        if (selection.any { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it) }) DownloadGridMenu(
             state = downloadState,
             onDownload = {
                 val songs = selection.filterNot { it.isLocal }

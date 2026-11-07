@@ -8,6 +8,7 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -39,8 +40,9 @@ object LxSearchClient {
             LxSearchSource.NETEASE -> searchNetease(normalizedQuery)
             LxSearchSource.QQ -> searchQq(normalizedQuery)
             LxSearchSource.KUWO -> KuwoSearchClient.search(normalizedQuery, limit = RESULT_LIMIT).getOrThrow()
+            LxSearchSource.QISHUI -> QishuiSearchClient.search(normalizedQuery, limit = RESULT_LIMIT).getOrThrow()
         }
-    }
+    }.onFailure { if (it is CancellationException) throw it }
 
     suspend fun loadCover(item: LxMusicInfo): String? {
         item.meta.picUrl?.let { return it }

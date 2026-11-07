@@ -34,6 +34,7 @@ class App : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         AppLogManager.install(this)
         LxSourceRuntime.initialize(this)
+        com.dd3boh.outertune.source.kugou.KugouConcept.initialize(this)
 
         if (BuildConfig.DEBUG) {
             System.setProperty("kotlinx.coroutines.debug", "on")

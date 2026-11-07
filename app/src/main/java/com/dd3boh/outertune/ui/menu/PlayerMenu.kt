@@ -245,7 +245,7 @@ fun PlayerMenu(
         ) {
             showChoosePlaylistDialog = true
         }
-        if (!mediaMetadata.isLocal)
+        if (com.dd3boh.outertune.source.SourceCapabilities.canDownload(mediaMetadata))
             DownloadGridMenu(
                 localDateTime = download,
                 onDownload = {

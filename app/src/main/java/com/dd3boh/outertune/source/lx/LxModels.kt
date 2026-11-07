@@ -3,6 +3,8 @@ package com.dd3boh.outertune.source.lx
 import com.dd3boh.outertune.models.MediaMetadata
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 
 @Serializable
 data class LxMusicInfo(
@@ -16,6 +18,8 @@ data class LxMusicInfo(
     val hash: String? = null,
     val mid: String? = null,
     val musicId: String? = null,
+    // 汽水取流需要完整 track（vid、bit_rates 等），随 sourceData 一同持久化。
+    val raw: JsonObject? = null,
 )
 
 @Serializable
@@ -42,6 +46,20 @@ data class LxQualityInfo(
 internal val lxJson = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
+}
+
+/** 只在脚本边界展开原始参数，数据库和 UI 继续保留带平台前缀的稳定歌曲 ID。 */
+internal fun JsonObject.toScriptMusicInfo(): JsonObject {
+    val track = this["raw"] as? JsonObject ?: return this
+    return buildJsonObject {
+        track.forEach { (key, value) -> put(key, value) }
+        this@toScriptMusicInfo.forEach { (key, value) -> put(key, value) }
+        val trackId = track["id"] ?: this@toScriptMusicInfo["songmid"]
+        if (trackId != null) {
+            put("id", trackId)
+            put("songId", trackId)
+        }
+    }
 }
 
 fun LxMusicInfo.toMediaMetadata() = MediaMetadata(

@@ -52,6 +52,7 @@ data class DownloadFailure(
     val songId: String,
     val title: String,
     val reason: String,
+    val retryable: Boolean = true,
 )
 
 /** 直接将洛雪解析后的音频写入用户选择的下载目录，不使用 Media3 下载缓存。 */
@@ -199,6 +200,12 @@ class DownloadUtil @Inject constructor(
     }
 
     private fun enqueueDownload(song: MediaMetadata) {
+        if (com.dd3boh.outertune.source.SourceCapabilities.isConcept(song.source) || song.id.startsWith(com.dd3boh.outertune.source.kugou.KUGOU_CONCEPT_ID_PREFIX)) {
+            pendingDownloadRequests.remove(song.id)
+            failedDownloadRequests.remove(song.id)
+            reportDownloadFailure(song.id, song.title, "已跳过：酷狗概念版歌曲仅支持在线播放，不支持下载", retryable = false)
+            return
+        }
         if (downloads.value.containsKey(song.id)) return
         // 下载目录没设置时直接报错，不然要等解析完、下完才在保存阶段失败
         if (!localMgr.isReady) {
@@ -232,6 +239,7 @@ class DownloadUtil @Inject constructor(
         val pending = pendingDownloadRequests[mediaId] ?: return
         CoroutineScope(dlCoroutine).launch {
             try {
+                check(com.dd3boh.outertune.source.SourceCapabilities.canDownload(pending.song)) { "该来源不支持下载" }
                 database.transaction { insert(pending.song) }
                 val quality = pending.currentQuality
                 val streamUrl = LxSourceRuntime.resolve(pending.song, qualityOverride = quality)
@@ -344,11 +352,11 @@ class DownloadUtil @Inject constructor(
     }
 
     /** 记录一次下载失败，并在短暂延迟后合并成一条提示事件 */
-    private fun reportDownloadFailure(mediaId: String, title: String, reason: String) {
+    private fun reportDownloadFailure(mediaId: String, title: String, reason: String, retryable: Boolean = true) {
         Log.w(tag, "下载失败：$title ($mediaId) - $reason")
         synchronized(failureBuffer) {
             failureBuffer.removeAll { it.songId == mediaId }
-            failureBuffer.add(DownloadFailure(mediaId, title, reason))
+            failureBuffer.add(DownloadFailure(mediaId, title, reason, retryable))
         }
         failureFlushJob?.cancel()
         failureFlushJob = CoroutineScope(dlCoroutine).launch {

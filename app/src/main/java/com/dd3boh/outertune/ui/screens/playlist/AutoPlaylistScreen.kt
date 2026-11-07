@@ -373,7 +373,7 @@ fun AutoPlaylistScreen(
 
                             Row {
                                 if (songs.isNotEmpty()) {
-                                    when (downloadState) {
+                                    if (songs.any { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it.song.source, it.song.isLocal) }) when (downloadState) {
                                         Download.STATE_COMPLETED -> {
                                             IconButton(
                                                 onClick = {

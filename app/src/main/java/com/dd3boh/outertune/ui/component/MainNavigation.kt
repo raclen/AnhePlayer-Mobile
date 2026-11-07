@@ -42,6 +42,7 @@ private data class DrawerDestination(
 private val drawerDestinations = listOf(
     DrawerDestination(Screens.Songs.route, "歌曲", Icons.Rounded.MusicNote),
     DrawerDestination(Screens.Playlists.route, "歌单", Icons.AutoMirrored.Rounded.QueueMusic),
+    DrawerDestination(Screens.Kugou.route, "酷狗专区", Icons.Rounded.MusicNote),
     DrawerDestination(Screens.Radio.route, "电台", Icons.Rounded.Radio),
     DrawerDestination(Screens.Settings.route, "设置", Icons.Rounded.Settings),
     DrawerDestination("settings/about", "关于", Icons.Rounded.Info),
@@ -64,7 +65,8 @@ fun MainNavigationDrawer(
             NavigationDrawerItem(
                 label = { Text(destination.title) },
                 selected = currentRoute == destination.route ||
-                    (currentRoute == "history" && destination.route == Screens.Songs.route),
+                    (currentRoute == "history" && destination.route == Screens.Songs.route) ||
+                    (destination.route == Screens.Kugou.route && currentRoute?.startsWith("kugou/") == true),
                 icon = { Icon(destination.icon, contentDescription = null) },
                 badge = {
                     if (destination.route == "settings/about" && hasUnreadUpdate) {
@@ -96,6 +98,7 @@ fun MainNavigationTopBar(
         Screens.Songs.route -> stringResource(R.string.songs)
         "history" -> stringResource(R.string.songs)
         Screens.Playlists.route -> "歌单"
+        Screens.Kugou.route -> stringResource(R.string.kugou_zone)
         Screens.Radio.route -> stringResource(R.string.radio)
         Screens.Settings.route -> stringResource(R.string.settings)
         "settings/about" -> stringResource(R.string.about)
@@ -110,7 +113,7 @@ fun MainNavigationTopBar(
             }
         },
         actions = {
-            if (currentRoute == Screens.Songs.route || currentRoute == "history" || currentRoute == Screens.Playlists.route) {
+            if (currentRoute == Screens.Songs.route || currentRoute == "history" || currentRoute == Screens.Playlists.route || currentRoute == Screens.Kugou.route) {
                 IconButton(onClick = onSearch) {
                     Icon(Icons.Rounded.Search, contentDescription = "搜索")
                 }

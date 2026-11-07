@@ -8,4 +8,5 @@ enum class LxSearchSource(
     NETEASE("wy", "网易云"),
     QQ("tx", "QQ 音乐"),
     KUWO("kw", "酷我"),
+    QISHUI("qs", "汽水"),
 }

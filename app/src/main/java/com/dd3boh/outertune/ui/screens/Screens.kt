@@ -37,6 +37,7 @@ sealed class Screens(
     data object Artists : Screens(R.string.artists, Icons.Rounded.Person, "artists")
     data object Albums : Screens(R.string.albums, Icons.Rounded.Album, "albums")
     data object Playlists : Screens(R.string.playlists, Icons.AutoMirrored.Rounded.QueueMusic, "playlists")
+    data object Kugou : Screens(R.string.kugou_zone, Icons.Rounded.MusicNote, "kugou")
     data object Radio : Screens(R.string.radio, Icons.Rounded.Radio, "radio")
     data object Library : Screens(R.string.library, Icons.Rounded.LibraryMusic, "library")
     data object Settings : Screens(R.string.settings, Icons.Rounded.Settings, "settings")

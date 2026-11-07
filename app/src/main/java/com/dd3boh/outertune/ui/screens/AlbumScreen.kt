@@ -277,7 +277,7 @@ fun AlbumScreen(
                                     )
                                 }
 
-                                if (albumWithSongsLocal.album.isLocal == false) {
+                                if (albumWithSongsLocal.songs.any { com.dd3boh.outertune.source.SourceCapabilities.canDownload(it.song.source, it.song.isLocal) }) {
                                     when (downloadState) {
                                         Download.STATE_COMPLETED -> {
                                             IconButton(
