@@ -390,12 +390,12 @@ object KugouConcept {
     }
     private fun claimDay(): String = Instant.ofEpochMilli(api.serverNow).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate().toString()
 
-    suspend fun loadHome(): KugouHomeData = coroutineScope {
+    suspend fun loadHome(mode: KugouRadioMode = KugouRadioMode.HEART): KugouHomeData = coroutineScope {
         ensureDevice()
         val errors = java.util.concurrent.ConcurrentHashMap<String, String>()
         suspend fun <T> part(name: String, fallback: T, action: suspend () -> T): T = try { action() }
         catch (e: CancellationException) { throw e } catch (e: Exception) { errors[name] = e.message ?: "加载失败"; fallback }
-        val radio = async { if (!session.loggedIn) emptyList() else part("radio", emptyList()) { radioSongs() } }
+        val radio = async { if (!session.loggedIn) emptyList() else part("radio", emptyList()) { radioSongs(mode) } }
         val daily = async { if (!session.loggedIn) emptyList() else part("daily", emptyList()) {
             val data = api.request("/everyday_song_recommend", query = mapOf("platform" to "ios"), post = true, router = "everydayrec.service.kugou.com").obj("data")
             KugouParser.songs(data.rows("song_list", "songs", "songlist", "list")).take(24)
@@ -410,18 +410,19 @@ object KugouConcept {
         } }
         KugouHomeData(radio.await(), daily.await(), playlists.await(), ranks.await(), news.await(), errors.toMap())
     }
-    private suspend fun radioSongs(): List<MediaMetadata> {
-        requireAccount()
-        val time = api.serverNow
-        val body = buildJsonObject {
-            put("appid", 3116); put("clienttime", time); put("mid", session.mid); put("action", "play")
-            put("recommend_source_locked", 0); put("song_pool_id", 0); put("callerid", 0); put("m_type", 1)
-            put("platform", "ios"); put("area_code", 1); put("remain_songcnt", 0); put("clientver", 11440)
-            put("is_overplay", 0); put("mode", "normal"); put("key", KugouCrypto.parameterKey(time.toString()))
-            put("userid", session.userId); put("kguid", session.userId); put("token", session.token)
+    suspend fun radioSongs(mode: KugouRadioMode = KugouRadioMode.HEART): List<MediaMetadata> {
+        requireAccount(); ensureDevice()
+        val (expected, current) = accountMutex.withLock {
+            check(session.loggedIn && mutableState.value.status == KugouAccountStatus.SIGNED_IN) { "请前往设置登录酷狗账号" }
+            version.value to session
         }
-        val data = api.request("/v2/personal_recommend", body = body, router = "persnfm.service.kugou.com").obj("data")
-        return KugouParser.songs(data.rows("song_list", "songs", "songlist", "list"))
+        // body、签名参数和请求头必须使用同一账号快照，不能在请求途中混入新账号。
+        val body = KugouRadioProtocol.body(current, api.serverNow, mode)
+        val data = api.request(KugouRadioProtocol.PATH, body = body, router = KugouRadioProtocol.ROUTER, sessionOverride = current).obj("data")
+        checkVersion(expected)
+        val songs = KugouParser.songs(data.rows("song_list", "songs", "songlist", "list"))
+        checkVersion(expected)
+        return songs
     }
     suspend fun searchSongs(query: String, page: Int = 1): KugouSongPage {
         requireAccount(); ensureDevice()
@@ -527,12 +528,12 @@ object KugouConcept {
     suspend fun resolveLyrics(song: MediaMetadata): String? {
         require(song.source == KUGOU_CONCEPT_SOURCE)
         val info = song.sourceData?.let { kugouJson.parseToJsonElement(it) as? JsonObject } ?: return null
-        val response = api.request("/v1/search", host = "lyrics.kugou.com", includeAccount = false, defaults = false,
-            query = mapOf("album_audio_id" to info.text("album_audio_id").ifBlank { "0" }, "appid" to "3116", "clientver" to "11440", "duration" to (song.duration.coerceAtLeast(0) * 1000L).toString(), "hash" to info.text("hash"), "keyword" to "${song.title} ${song.artists.joinToString { it.name }}", "lrctxt" to "1", "man" to "no"))
-        val candidate = response.rows("candidates").firstOrNull() ?: response.obj("data").rows("candidates").firstOrNull() ?: return null
-        val body = api.request("/download", host = "lyrics.kugou.com", includeAccount = false, defaults = false,
-            query = mapOf("ver" to "1", "client" to "android", "id" to candidate.text("id"), "accesskey" to candidate.text("accesskey"), "fmt" to "lrc", "charset" to "utf8"))
-        val content = body.text("content")
-        return content.takeIf(String::isNotBlank)?.let { KugouCrypto.decodeBase64(it).toString(Charsets.UTF_8) }
+        val response = api.request("/v1/search", host = "lyrics.kugou.com", includeAccount = false, defaults = false, checkBusiness = false,
+            query = KugouLyricsProtocol.searchQuery(info.text("hash"), info.text("album_audio_id"), song.duration,
+                "${song.title} ${song.artists.joinToString { it.name }}"))
+        val candidate = KugouLyricsProtocol.candidate(response) ?: return null
+        val body = api.request("/download", host = "lyrics.kugou.com", includeAccount = false, defaults = false, checkBusiness = false,
+            query = KugouLyricsProtocol.downloadQuery(candidate))
+        return KugouLyricsProtocol.decodeContent(body)
     }
 }

@@ -495,13 +495,18 @@ class MusicService : MediaLibraryService(),
                     } else {
                         items.addAll(initialStatus.items)
                     }
+                    // QueueBoard 沿用 playlistId 字段持久化标记；仅传入专区电台 ID，其他队列行为不变。
+                    val conceptRadioId = queue.playlistId?.takeIf { id ->
+                        items.all { it.source == "kg_concept" } &&
+                            com.dd3boh.outertune.source.kugou.KugouRadioMode.fromQueue(id, null, items.firstOrNull()?.source) != null
+                    }
                     val q = queueBoard.value.addQueue(
                         queueTitle ?: getString(R.string.queue),
                         items,
                         shuffled = queue.startShuffled,
                         startIndex = if (initialStatus.mediaItemIndex > 0) initialStatus.mediaItemIndex else 0,
                         replace = replace || preloadItem != null,
-                        continuationEndpoint = if (isRadio) items.takeLast(4).shuffled().first().id else null // yq?.getContinuationEndpoint()
+                        continuationEndpoint = if (isRadio) items.takeLast(4).shuffled().first().id else conceptRadioId // yq?.getContinuationEndpoint()
                     )
                     queueBoard.value.setCurrQueue(q, shouldResume)
                 }

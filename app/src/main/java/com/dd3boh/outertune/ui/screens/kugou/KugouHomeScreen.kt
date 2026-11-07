@@ -24,10 +24,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,7 +46,10 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,9 +64,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.media3.common.Player.STATE_ENDED
+import androidx.media3.common.Player.STATE_IDLE
+import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.LocalSnackbarHostState
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.source.kugou.KugouAccountStatus
+import com.dd3boh.outertune.source.kugou.KugouRadioMode
 import com.dd3boh.outertune.viewmodels.KugouHomeViewModel
 import kotlinx.coroutines.launch
 
@@ -74,16 +87,59 @@ fun KugouHomeScreen(
     val scope = rememberCoroutineScope()
     val snackbar = LocalSnackbarHostState.current
     val data = state.data
-    fun playSection(songs: List<MediaMetadata>, title: String) {
-        if (songs.isNotEmpty()) playback(songs, 0, title)
+    val player = LocalPlayerConnection.current
+    val currentSong = player?.mediaMetadata?.collectAsState()?.value
+    val isPlaying = player?.isPlaying?.collectAsState()?.value == true
+    val queueBoard = player?.queueBoard?.collectAsState()?.value
+    val queuePlaylistId = player?.queuePlaylistId?.collectAsState()?.value
+    val currentQueue = queueBoard?.getCurrentQueue()
+    val activeMode = KugouRadioMode.fromQueue(currentQueue?.playlistId ?: queuePlaylistId, currentQueue?.title, currentSong?.source)
+    val radioActive = activeMode == state.radioMode
+    val radioSong = if (radioActive) currentSong else data.radioSongs.firstOrNull()
+
+    fun playSection(songs: List<MediaMetadata>, title: String, playlistId: String? = null) {
+        if (songs.isNotEmpty()) playback(songs, 0, title, playlistId)
         else scope.launch {
-            if (account.status != KugouAccountStatus.SIGNED_IN && (title == "红心电台" || title == "每日推荐")) {
+            if (account.status != KugouAccountStatus.SIGNED_IN && (KugouRadioMode.entries.any { it.title == title } || title == "每日推荐")) {
                 if (snackbar.showSnackbar("此推荐需要酷狗账号授权", actionLabel = "前往设置", withDismissAction = true) == SnackbarResult.ActionPerformed) {
                     navController.navigate("settings/kugou")
                 }
             } else snackbar.showSnackbar("暂无可播放歌曲，请刷新后重试")
         }
     }
+
+    fun toggleRadio() {
+        playback.cancel()
+        val queue = player?.queueBoard?.value?.getCurrentQueue()
+        val mode = KugouRadioMode.fromQueue(queue?.playlistId, queue?.title, player?.mediaMetadata?.value?.source)
+        if (player != null && mode == state.radioMode && account.status == KugouAccountStatus.SIGNED_IN) {
+            if (player.player.playWhenReady && player.player.playbackState != STATE_ENDED) player.player.pause()
+            else {
+                if (player.player.playbackState == STATE_ENDED) player.player.seekToDefaultPosition(0)
+                if (player.player.playbackState == STATE_IDLE) player.player.prepare()
+                player.player.play()
+            }
+        } else playSection(data.radioSongs, state.radioMode.title, state.radioMode.playlistId)
+    }
+
+    fun radioLoadedCallback(): (List<MediaMetadata>, KugouRadioMode) -> Unit {
+        val originalQueue = player?.queueBoard?.value?.getCurrentQueue()
+        val originalMode = KugouRadioMode.fromQueue(originalQueue?.playlistId, originalQueue?.title, player?.mediaMetadata?.value?.source)
+        val wasPlaying = player?.player?.let { it.playWhenReady && it.playbackState !in listOf(STATE_IDLE, STATE_ENDED) } == true
+        return { songs, mode ->
+            // 仅续接仍在播放的专区电台；暂停、切到每日推荐或其他音乐后不抢播放。
+            val canContinue = {
+                val queue = player?.queueBoard?.value?.getCurrentQueue()
+                wasPlaying && originalMode != null && queue?.id == originalQueue?.id &&
+                    KugouRadioMode.fromQueue(queue?.playlistId, queue?.title, player?.mediaMetadata?.value?.source) == originalMode &&
+                    player?.player?.playWhenReady == true && player.player.playbackState !in listOf(STATE_IDLE, STATE_ENDED) &&
+                    viewModel.state.value.radioMode == mode && !viewModel.state.value.radioLoading
+            }
+            if (canContinue()) playback(songs, 0, mode.title, mode.playlistId, canPlay = canContinue)
+        }
+    }
+
+    fun refreshRadio() = viewModel.refreshRadio(radioLoadedCallback())
     // 主导航的标题栏由 MainActivity 提供，首页只绘制内容。
     KugouTheme {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -108,9 +164,22 @@ fun KugouHomeScreen(
                     item("radio") {
                         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
                         state.error?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-                        KugouRadioHero(data.radioSongs, state.loading, viewModel::refresh) { playSection(data.radioSongs, "红心电台") }
-                        (data.errors["radio"] ?: data.errors["radioSongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-                        if (data.radioSongs.isEmpty() && !state.loading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "暂无个人推荐，请稍后刷新。" else "登录酷狗账号，开启个人推荐。账号可在设置中管理。")
+                        KugouRadioHero(
+                            song = radioSong, mode = state.radioMode, pendingMode = state.pendingRadioMode,
+                            loading = state.loading || state.radioLoading, isPlaying = radioActive && isPlaying,
+                            canPlay = radioActive || !(state.loading || state.radioLoading), canSelectMode = !state.loading,
+                            onRefresh = ::refreshRadio, onPlay = ::toggleRadio,
+                            onSelectMode = { viewModel.selectRadioMode(it, radioLoadedCallback()) },
+                        )
+                        if (state.radioLoading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                        (state.radioError ?: data.errors["radio"] ?: data.errors["radioSongs"])?.let { message ->
+                            KugouMessage(message, {
+                                val failedMode = state.radioErrorMode
+                                if (failedMode != null && failedMode != state.radioMode) viewModel.selectRadioMode(failedMode, radioLoadedCallback())
+                                else refreshRadio()
+                            }, isError = true)
+                        }
+                        if (data.radioSongs.isEmpty() && !state.loading && !state.radioLoading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "暂无个人推荐，请稍后刷新。" else "登录酷狗账号，开启个人推荐。账号可在设置中管理。")
                     }
                     item("daily_title") {
                         KugouSectionTitle("每日推荐", "播放全部", subtitle = "根据你的口味每天更新") { playSection(data.dailySongs, "每日推荐") }
@@ -171,10 +240,16 @@ fun KugouHomeScreen(
 }
 
 @Composable
-private fun KugouRadioHero(songs: List<MediaMetadata>, loading: Boolean, onRefresh: () -> Unit, onPlay: () -> Unit) {
+private fun KugouRadioHero(
+    song: MediaMetadata?, mode: KugouRadioMode, pendingMode: KugouRadioMode?, loading: Boolean,
+    isPlaying: Boolean, canPlay: Boolean, canSelectMode: Boolean,
+    onRefresh: () -> Unit, onPlay: () -> Unit, onSelectMode: (KugouRadioMode) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val gradient = if (dark) listOf(Color(0xFFB8143C), Color(0xFF7F0D29), Color(0xFF3D0613))
         else listOf(Color(0xFFE6154A), Color(0xFFC5103E), Color(0xFF990B30))
+    val subtitle = if (loading && pendingMode != null) "正在加载${pendingMode.title}…" else mode.subtitle
     BoxWithConstraints(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 22.dp)
             .clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(gradient)),
@@ -182,24 +257,37 @@ private fun KugouRadioHero(songs: List<MediaMetadata>, loading: Boolean, onRefre
         val narrow = maxWidth < 280.dp || LocalDensity.current.fontScale >= 1.5f
         Column(Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(start = 16.dp, end = 12.dp, bottom = 16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.18f), contentColor = Color.White) {
-                    Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Icon(Icons.Rounded.Favorite, null, Modifier.size(13.dp))
-                        Text("红心电台", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Box(Modifier.weight(1f)) {
+                    Surface(onClick = { expanded = true }, enabled = canSelectMode, shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.18f), contentColor = Color.White) {
+                        Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Icon(Icons.Rounded.Favorite, null, Modifier.size(13.dp))
+                            Text(mode.title, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Rounded.ExpandMore, "切换酷狗电台频道", Modifier.size(16.dp))
+                        }
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        KugouRadioMode.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.title) }, enabled = canSelectMode && option != (pendingMode ?: mode),
+                                trailingIcon = { if (option == mode) Icon(Icons.Rounded.Check, null) },
+                                onClick = { expanded = false; onSelectMode(option) },
+                            )
+                        }
                     }
                 }
-                Spacer(Modifier.weight(1f))
                 IconButton(onClick = onRefresh, enabled = !loading) {
-                    Icon(Icons.Rounded.Refresh, "刷新酷狗推荐", Modifier.size(18.dp), tint = Color.White.copy(alpha = if (loading) 0.5f else 1f))
+                    Icon(Icons.Rounded.Refresh, "刷新${mode.title}", Modifier.size(18.dp), tint = Color.White.copy(alpha = if (loading) 0.5f else 1f))
                 }
             }
             if (narrow) {
-                KugouRadioText(songs.firstOrNull())
-                KugouRadioArtwork(songs.firstOrNull(), onPlay, Modifier.align(Alignment.End).padding(top = 12.dp))
+                KugouRadioText(song, mode, subtitle)
+                KugouRadioArtwork(song, mode, isPlaying, canPlay, loading, onPlay, Modifier.align(Alignment.End).padding(top = 12.dp))
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f)) { KugouRadioText(songs.firstOrNull()) }
-                    KugouRadioArtwork(songs.firstOrNull(), onPlay)
+                    Column(Modifier.weight(1f)) { KugouRadioText(song, mode, subtitle) }
+                    KugouRadioArtwork(song, mode, isPlaying, canPlay, loading, onPlay)
                 }
             }
         }
@@ -207,16 +295,19 @@ private fun KugouRadioHero(songs: List<MediaMetadata>, loading: Boolean, onRefre
 }
 
 @Composable
-private fun KugouRadioText(song: MediaMetadata?) {
-    Text("按你的口味，发现心动旋律", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
-    Text(song?.title ?: "开启私人红心漫游", modifier = Modifier.padding(top = 4.dp), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold,
+private fun KugouRadioText(song: MediaMetadata?, mode: KugouRadioMode, subtitle: String) {
+    Text(subtitle, fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+    Text(song?.title ?: "开启${mode.title}", modifier = Modifier.padding(top = 4.dp), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold,
         color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
     Text(song?.artists?.joinToString("、") { it.name }?.ifBlank { "未知歌手" } ?: "点击播放，听见新的喜欢",
         modifier = Modifier.padding(top = 3.dp), fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
-private fun KugouRadioArtwork(song: MediaMetadata?, onPlay: () -> Unit, modifier: Modifier = Modifier) {
+private fun KugouRadioArtwork(
+    song: MediaMetadata?, mode: KugouRadioMode, isPlaying: Boolean, enabled: Boolean, loading: Boolean,
+    onPlay: () -> Unit, modifier: Modifier = Modifier,
+) {
     Box(modifier.size(88.dp), contentAlignment = Alignment.TopStart) {
         // 唱片是静态主题图形，封面只使用真实返回的歌曲，不增加网络请求。
         Box(Modifier.size(80.dp).clip(CircleShape).background(Color(0xFF12131F)), contentAlignment = Alignment.Center) {
@@ -227,9 +318,11 @@ private fun KugouRadioArtwork(song: MediaMetadata?, onPlay: () -> Unit, modifier
             KugouCover(song?.getThumbnailModel(), Modifier.size(58.dp), cornerRadius = 29.dp)
             Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF12131F)))
         }
-        Surface(onClick = onPlay, modifier = Modifier.size(48.dp).align(Alignment.BottomEnd), shape = CircleShape, color = Color.White) {
+        Surface(onClick = onPlay, enabled = enabled, modifier = Modifier.size(48.dp).align(Alignment.BottomEnd), shape = CircleShape, color = Color.White) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.PlayArrow, "播放红心电台", Modifier.size(26.dp), tint = Color(0xFFBF103D))
+                if (loading && !enabled) CircularProgressIndicator(Modifier.size(22.dp), color = Color(0xFFBF103D), strokeWidth = 2.dp)
+                else Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    if (isPlaying) "暂停${mode.title}" else "播放${mode.title}", Modifier.size(26.dp), tint = Color(0xFFBF103D))
             }
         }
     }

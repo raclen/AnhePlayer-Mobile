@@ -14,6 +14,7 @@ import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.reportException
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.akanework.gramophone.logic.utils.LrcUtils
 import org.akanework.gramophone.logic.utils.SemanticLyrics
@@ -56,7 +57,7 @@ class LyricsHelper @Inject constructor(
         if (cached != null) {
             return LoadedLyrics(parseLrc(cached.lyrics, trim, multiline), LyricsSource.ONLINE)
         }
-        val dbLyrics = database.lyrics(mediaMetadata.id).let { it.first()?.lyrics }
+        val dbLyrics = LyricsCachePolicy.usable(mediaMetadata.source, database.lyrics(mediaMetadata.id).first()?.lyrics)
         if (dbLyrics != null && !prefLocal) {
             return LoadedLyrics(parseLrc(dbLyrics, trim, multiline), LyricsSource.ONLINE)
         }
@@ -123,6 +124,7 @@ class LyricsHelper @Inject constructor(
         // 概念版和洛雪各自解析，不把账号歌曲参数传给脚本。
         if (mediaMetadata.source != null) {
             runCatching { SourceResolver.resolveLyric(mediaMetadata) }
+                .onFailure { if (it is CancellationException) throw it }
                 .getOrNull()
                 ?.let { return it }
         }

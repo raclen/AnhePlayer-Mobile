@@ -318,17 +318,17 @@ internal fun KugouCollectionRow(collection: KugouCollection, type: String, navCo
 }
 
 @Composable
-internal fun rememberKugouPlayback(navController: NavController): (List<MediaMetadata>, Int, String) -> Unit {
+internal fun rememberKugouPlayback(navController: NavController): KugouPlayback {
     val database = LocalDatabase.current
     val player = LocalPlayerConnection.current
     val snackbar = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
     val preparation = remember { KugouPlaybackPreparation() }
-    return { songs, index, title ->
+    return KugouPlayback(cancel = { preparation.job?.cancel() }) { songs, index, title, playlistId, canPlay ->
         preparation.job?.cancel()
         preparation.job = scope.launch {
             try {
-                if (songs.isNotEmpty()) {
+                if (songs.isNotEmpty() && canPlay()) {
                     if (songs.any { it.source == KUGOU_CONCEPT_SOURCE } && KugouConcept.accountState.value.status != KugouAccountStatus.SIGNED_IN) {
                         if (snackbar.showSnackbar("酷狗账号需要登录，请前往设置", actionLabel = "前往设置", withDismissAction = true) == SnackbarResult.ActionPerformed) {
                             navController.navigate("settings/kugou")
@@ -339,8 +339,9 @@ internal fun rememberKugouPlayback(navController: NavController): (List<MediaMet
                         val session = KugouConcept.sessionVersion.value
                         val needsAccount = songs.any { it.source == KUGOU_CONCEPT_SOURCE }
                         withContext(Dispatchers.IO) { songs.forEach { database.insert(it) } }
-                        if (!needsAccount || session == KugouConcept.sessionVersion.value) {
-                            player.playQueue(ListQueue(title = title, items = songs, startIndex = index.coerceIn(songs.indices)))
+                        // 频道切换准备期间，用户可能暂停或改播其他内容；落队列前再次核对。
+                        if ((!needsAccount || session == KugouConcept.sessionVersion.value) && canPlay()) {
+                            player.playQueue(ListQueue(playlistId = playlistId, title = title, items = songs, startIndex = index.coerceIn(songs.indices)))
                         }
                     }
                 }
@@ -351,6 +352,16 @@ internal fun rememberKugouPlayback(navController: NavController): (List<MediaMet
             }
         }
     }
+}
+
+internal class KugouPlayback(
+    val cancel: () -> Unit,
+    private val play: (List<MediaMetadata>, Int, String, String?, () -> Boolean) -> Unit,
+) {
+    operator fun invoke(
+        songs: List<MediaMetadata>, index: Int, title: String,
+        playlistId: String? = null, canPlay: () -> Boolean = { true },
+    ) = play(songs, index, title, playlistId, canPlay)
 }
 
 private class KugouPlaybackPreparation(var job: Job? = null)
