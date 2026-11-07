@@ -60,7 +60,7 @@ internal object GitHubReleaseClient {
                         val source = it.body.source()
                         source.request(MAX_RESPONSE_BYTES + 1)
                         if (source.buffer.size > MAX_RESPONSE_BYTES) {
-                            throw UpdateCheckException("更新信息过大，请前往官网查看")
+                            throw UpdateCheckException("更新信息过大，请稍后重试")
                         }
                         source.readUtf8()
                     }

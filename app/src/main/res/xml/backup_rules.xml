@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <exclude domain="sharedpref" path="kugou_concept_secure.xml" />
+    <exclude domain="sharedpref" path="app_update_download.xml" />
+    <exclude domain="external" path="Download/app-updates/" />
     <exclude
         domain="file"
         path="./exoplayer" />

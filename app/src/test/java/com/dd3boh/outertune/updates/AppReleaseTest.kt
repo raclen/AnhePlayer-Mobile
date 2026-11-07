@@ -177,6 +177,75 @@ class AppReleaseTest {
         assertFalse(AppUpdateState().needsPrompt)
     }
 
+    @Test
+    fun bothArmArchitecturesUseTheirActualAssetUrls() {
+        val arm64 = apiRelease("2.0.5", 205)
+        val arm32 = apiRelease("2.0.5", 205, abi = "armeabi-v7a")
+        val release = findLatestRelease(JsonArray(listOf(withAssets(arm64, arm64, arm32))).toString(), "core")!!
+        assertEquals(2, release.assets.size)
+        assertEquals("arm64-v8a", release.downloadAsset(listOf("arm64-v8a", "armeabi-v7a"))?.abi)
+        val selected = release.downloadAsset(listOf("armeabi-v7a"))!!
+        assertEquals("armeabi-v7a", selected.abi)
+        assertTrue(selected.downloadUrl.endsWith("AnhePlayer-2.0.5-core-armeabi-v7a-release-205.apk"))
+        assertNull(release.downloadAsset(listOf("x86_64", "x86")))
+    }
+
+    @Test
+    fun arm32AloneDoesNotMarkReleaseAsPublished() {
+        assertNull(findLatestRelease(JsonArray(listOf(apiRelease("2.0.5", 205, abi = "armeabi-v7a"))).toString(), "core"))
+    }
+
+    @Test
+    fun mismatchedArm32VersionCodeIsNotDownloadable() {
+        val arm64 = apiRelease("2.0.5", 205)
+        val arm32 = apiRelease("2.0.5", 204, abi = "armeabi-v7a")
+        val release = findLatestRelease(JsonArray(listOf(withAssets(arm64, arm64, arm32))).toString(), "core")!!
+        assertEquals(205L, release.versionCode)
+        assertNull(release.downloadAsset(listOf("armeabi-v7a")))
+    }
+
+    @Test
+    fun assetDigestAndBothArchitecturesSurviveCacheRoundTrip() {
+        val arm64 = apiRelease("2.0.5", 205)
+        val arm32 = apiRelease("2.0.5", 205, abi = "armeabi-v7a")
+        val first = (arm64["assets"] as JsonArray)[0] as JsonObject
+        val digest = "ab".repeat(32)
+        val withDigest = JsonObject(first + ("digest" to JsonPrimitive("sha256:$digest")))
+        val combined = JsonObject(withAssets(arm64, arm32) + ("assets" to JsonArray(listOf(withDigest, (arm32["assets"] as JsonArray)[0]))))
+        val release = findLatestRelease(JsonArray(listOf(combined)).toString(), "core")!!
+        assertEquals(digest, release.downloadAsset(listOf("arm64-v8a"))?.sha256)
+        assertEquals(release, AppRelease.fromCache(release.toCache(), "core"))
+        assertTrue(AppRelease.fromCache(release.toCache(), "full")!!.assets.isEmpty())
+    }
+
+    @Test
+    fun invalidDigestIsNotAcceptedAsDownloadableAsset() {
+        val original = apiRelease("2.0.5", 205)
+        val asset = (original["assets"] as JsonArray)[0] as JsonObject
+        val invalid = JsonObject(original + ("assets" to JsonArray(listOf(JsonObject(asset + ("digest" to JsonPrimitive("sha256:bad")))))))
+        assertNull(findLatestRelease(JsonArray(listOf(invalid)).toString(), "core"))
+    }
+
+    @Test
+    fun legacyCacheKeepsReminderButRequiresFreshDownloadMetadata() {
+        val legacy = JsonObject(kotlinx.serialization.json.Json.parseToJsonElement(cachedRelease("2.0.5", 205).toCache()) as JsonObject - "assets")
+        val release = AppRelease.fromCache(legacy.toString(), "core")!!
+        assertEquals("2.0.5", release.version)
+        assertTrue(release.assets.isEmpty())
+        assertNull(release.downloadAsset(listOf("arm64-v8a")))
+    }
+
+    @Test
+    fun tamperedCachedUrlCannotReachDownloadSelection() {
+        val original = apiRelease("2.0.5", 205)
+        val release = findLatestRelease(JsonArray(listOf(original)).toString(), "core")!!
+        val tampered = release.copy(assets = release.assets.map { it.copy(downloadUrl = "https://example.com/update.apk") })
+        assertTrue(AppRelease.fromCache(tampered.toCache(), "core")!!.assets.isEmpty())
+    }
+
+    private fun withAssets(release: JsonObject, vararg sources: JsonObject): JsonObject =
+        JsonObject(release + ("assets" to JsonArray(sources.flatMap { (it["assets"] as JsonArray).toList() })))
+
     private fun cachedRelease(version: String, code: Long) = AppRelease(
         version, code, "$APP_PROJECT_URL/releases/tag/v$version", "# AnhePlayer v$version\n\n## 修复\n\n- **播放优化**\n"
     )

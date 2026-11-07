@@ -13,17 +13,35 @@ import kotlinx.serialization.json.put
 const val APP_PROJECT_URL = "https://github.com/raclen/AnhePlayer-Mobile"
 internal const val APP_RELEASES_API = "https://api.github.com/repos/raclen/AnhePlayer-Mobile/releases?per_page=30"
 
-/** 面向用户的下载入口；更新检查仍走 GitHub API，但点击下载统一跳官网，避免直接暴露仓库。 */
-const val APP_DOWNLOAD_URL = "https://anhe-player.loc.cc/mobile"
+data class AppReleaseAsset(
+    val name: String,
+    val abi: String,
+    val versionCode: Long,
+    val downloadUrl: String,
+    val size: Long,
+    val sha256: String? = null,
+) {
+    internal fun toJson(): JsonObject = buildJsonObject {
+        put("name", name)
+        put("state", "uploaded")
+        put("browser_download_url", downloadUrl)
+        put("size", size)
+        sha256?.let { put("digest", "sha256:$it") }
+    }
+}
 
 data class AppRelease(
     val version: String,
     val versionCode: Long,
     val releaseUrl: String,
     val notes: String,
+    val assets: List<AppReleaseAsset> = emptyList(),
 ) {
     fun isNewerThan(installedVersion: String, installedVersionCode: Long): Boolean =
         isNewerVersion(version, installedVersion) && versionCode > installedVersionCode
+
+    fun downloadAsset(supportedAbis: List<String>): AppReleaseAsset? =
+        supportedAbis.firstNotNullOfOrNull { abi -> assets.firstOrNull { it.abi == abi && it.versionCode == versionCode } }
 
     val displayNotes: String
         get() = notes.lineSequence()
@@ -42,17 +60,20 @@ data class AppRelease(
         put("versionCode", versionCode)
         put("releaseUrl", releaseUrl)
         put("notes", notes)
+        put("assets", JsonArray(assets.map(AppReleaseAsset::toJson)))
     }.toString()
 
     companion object {
-        fun fromCache(value: String): AppRelease? = runCatching {
+        fun fromCache(value: String, flavor: String? = null): AppRelease? = runCatching {
             val item = Json.parseToJsonElement(value) as? JsonObject ?: return null
             val version = normalizeVersion(item.string("version")) ?: return null
             val versionCode = item.long("versionCode")?.takeIf { it > 0 } ?: return null
             val url = item.string("releaseUrl")
             val tag = url.removePrefix("$APP_PROJECT_URL/releases/tag/")
             if (url != "$APP_PROJECT_URL/releases/tag/$tag" || normalizeVersion(tag) != version) return null
-            AppRelease(version, versionCode, url, item.string("notes").take(MAX_NOTES_LENGTH))
+            // 旧缓存没有 assets：保留提醒，下载前重新获取经过校验的附件信息。
+            val assets = parseAssets(item, version, tag, flavor).filter { it.versionCode == versionCode }
+            AppRelease(version, versionCode, url, item.string("notes").take(MAX_NOTES_LENGTH), assets)
         }.getOrNull()
     }
 }
@@ -77,7 +98,7 @@ internal fun compareVersions(left: String, right: String): Int {
 internal fun isNewerVersion(version: String, previousVersion: String): Boolean =
     normalizeVersion(version) != null && compareVersions(version, previousVersion) > 0
 
-/** 不依赖 GitHub 的 latest 标记；只从有对应正式 APK 的发布中挑选最高版本。 */
+/** 不依赖 GitHub 的 latest 标记；arm64 正式 APK 上传完成后，才视为该版本已发布。 */
 internal fun findLatestRelease(response: String, flavor: String): AppRelease? {
     val releases = Json.parseToJsonElement(response) as? JsonArray
         ?: throw IllegalArgumentException("发布信息不是数组")
@@ -88,19 +109,35 @@ internal fun findLatestRelease(response: String, flavor: String): AppRelease? {
         val version = normalizeVersion(tag) ?: return@mapNotNull null
         val releaseUrl = release.string("html_url")
         if (releaseUrl != "$APP_PROJECT_URL/releases/tag/$tag") return@mapNotNull null
-        val assetPattern = Regex("^(?:AnhePlayer|OuterTune)-${Regex.escape(version)}-${Regex.escape(flavor)}-arm64-v8a-release-(\\d+)\\.apk$")
-        val versionCode = (release["assets"] as? JsonArray).orEmpty().mapNotNull asset@{ assetElement ->
-            val asset = assetElement as? JsonObject ?: return@asset null
-            val name = asset.string("name")
-            val match = assetPattern.matchEntire(name) ?: return@asset null
-            if (asset.string("state") != "uploaded" || (asset.long("size") ?: 0) <= 0) return@asset null
-            if (asset.string("browser_download_url") != "$APP_PROJECT_URL/releases/download/$tag/$name") return@asset null
-            match.groupValues[1].toLongOrNull()?.takeIf { it > 0 }
-        }.maxOrNull() ?: return@mapNotNull null
-        AppRelease(version, versionCode, releaseUrl, release.string("body").take(MAX_NOTES_LENGTH))
+        val assets = parseAssets(release, version, tag, flavor)
+        val versionCode = assets.filter { it.abi == "arm64-v8a" }.maxOfOrNull { it.versionCode }
+            ?: return@mapNotNull null
+        AppRelease(version, versionCode, releaseUrl, release.string("body").take(MAX_NOTES_LENGTH),
+            assets.filter { it.versionCode == versionCode })
     }.maxWithOrNull { left, right ->
         compareVersions(left.version, right.version).takeIf { it != 0 }
             ?: left.versionCode.compareTo(right.versionCode)
+    }
+}
+
+private fun parseAssets(item: JsonObject, version: String, tag: String, flavor: String?): List<AppReleaseAsset> {
+    val flavorPattern = flavor?.let(Regex::escape) ?: "(?:core|full)"
+    val pattern = Regex("^(?:AnhePlayer|OuterTune)-${Regex.escape(version)}-$flavorPattern-(arm64-v8a|armeabi-v7a)-release-(\\d+)\\.apk$")
+    return (item["assets"] as? JsonArray).orEmpty().mapNotNull { element ->
+        val asset = element as? JsonObject ?: return@mapNotNull null
+        val name = asset.string("name")
+        val match = pattern.matchEntire(name) ?: return@mapNotNull null
+        val size = asset.long("size")?.takeIf { it > 0 } ?: return@mapNotNull null
+        if (asset.string("state") != "uploaded") return@mapNotNull null
+        val url = asset.string("browser_download_url")
+        if (url != "$APP_PROJECT_URL/releases/download/$tag/$name") return@mapNotNull null
+        val code = match.groupValues[2].toLongOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+        val digest = asset.string("digest")
+        val sha256 = if (digest.isBlank()) null else {
+            if (!digest.matches(Regex("sha256:[a-fA-F0-9]{64}"))) return@mapNotNull null
+            digest.removePrefix("sha256:").lowercase()
+        }
+        AppReleaseAsset(name, match.groupValues[1], code, url, size, sha256)
     }
 }
 

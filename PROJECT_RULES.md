@@ -5,7 +5,8 @@
 - **触发信号**：修改版本检查、更新弹窗、导航红点或关于页更新入口。
 - **根因/约束**：旧更新器字段没有实际检查链路，旧关于链接指向 `raclen/OuterTune`；每次启动弹窗会打扰播放。
 - **正确做法**：更新来源固定为 `raclen/AnhePlayer-Mobile` 的 GitHub Releases；仅接受正式数字版本、非草稿/预发布且带对应 flavor 的已上传 `arm64-v8a-release` APK，版本名和 APK versionCode 均高于本机才提示。更新缓存、已弹版本、已读版本分别存入 DataStore；同版本自动弹窗最多一次，查看关于页后清除未读红点，但卡片保留到升级。自动检查按尝试时间限频 24 小时，手动检查可绕过限频；失败保留上次成功缓存。
-- **验证方式**：`:app:compileCoreDebugKotlin` 和非 UI 的 `:app:testCoreDebugUnitTest` 通过；手动确认首页提醒避开播放器、菜单与权限申请，稍后/重启不重复提醒，进入关于页清除红点，更高版本重新提醒。
+- **应用内安装边界**：更新入口不跳浏览器或发布页；发布完成仍以 arm64 APK 为依据，下载从同一正式 Release 的已上传附件按设备 ABI 选择，只接受相同 flavor、versionCode 和本仓库 HTTPS 地址。后台任务由系统 DownloadManager 执行并保存任务记录，安装包仅保存在应用专用更新目录，任务记录和 APK 排除备份。安装前校验实际大小、可用的 GitHub SHA-256、包名、版本和签名兼容性，通过限制为更新目录的 FileProvider 临时授予读取权限。Android 8+ 未授权时进入本应用的未知来源授权页，返回后重新读取权限再安装；调用系统安装器不代表安装成功，不实现静默安装。
+- **验证方式**：`:app:compileCoreDebugKotlin`、`:app:processCoreDebugMainManifest` 和非 UI 的 `:app:testCoreDebugUnitTest` 通过；手动确认首页提醒避开播放器、菜单与权限申请，稍后/重启不重复提醒，进入关于页清除红点，更高版本重新提醒；验证两种 ARM 架构下载、后台/进程恢复、取消与失败重试、拒绝/允许安装授权、取消后再次安装，以及正式同签名包覆盖升级并保留用户数据。
 - **适用范围**：`updates`、`AppUpdateViewModel`、`MainActivity`、主抽屉和关于页。
 
 ## 沟通与发布反馈约定

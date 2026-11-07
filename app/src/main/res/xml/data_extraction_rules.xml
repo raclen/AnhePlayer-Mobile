@@ -6,6 +6,8 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="kugou_concept_secure.xml" />
+        <exclude domain="sharedpref" path="app_update_download.xml" />
+        <exclude domain="external" path="Download/app-updates/" />
         <exclude
             domain="file"
             path="./exoplayer" />
@@ -18,6 +20,8 @@
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="kugou_concept_secure.xml" />
+        <exclude domain="sharedpref" path="app_update_download.xml" />
+        <exclude domain="external" path="Download/app-updates/" />
         <exclude
             domain="file"
             path="./exoplayer" />

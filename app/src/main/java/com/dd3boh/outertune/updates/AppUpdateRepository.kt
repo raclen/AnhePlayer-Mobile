@@ -56,7 +56,7 @@ class AppUpdateRepository internal constructor(private val dataStore: DataStore<
         AppUpdateState(
             isLoaded = true,
             isChecking = checking,
-            release = preferences[AppUpdateReleaseKey]?.let(AppRelease::fromCache)
+            release = preferences[AppUpdateReleaseKey]?.let { AppRelease.fromCache(it, BuildConfig.FLAVOR) }
                 ?.takeIf { it.isNewerThan(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong()) },
             lastSuccessAt = preferences[AppUpdateLastSuccessKey] ?: 0,
             promptedVersion = preferences[AppUpdatePromptedVersionKey].orEmpty(),
@@ -104,7 +104,7 @@ class AppUpdateRepository internal constructor(private val dataStore: DataStore<
         var claimed = false
         try {
             dataStore.edit {
-                val release = it[AppUpdateReleaseKey]?.let(AppRelease::fromCache)
+                val release = it[AppUpdateReleaseKey]?.let { AppRelease.fromCache(it, BuildConfig.FLAVOR) }
                 if (release?.version == version &&
                     release.isNewerThan(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong()) &&
                     isNewerVersion(version, it[AppUpdatePromptedVersionKey].orEmpty()) &&
