@@ -1,8 +1,12 @@
 package com.dd3boh.outertune.ui.screens.kugou
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,7 +16,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,19 +30,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarResult
@@ -44,18 +47,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -166,12 +169,18 @@ fun KugouHomeScreen(
                         state.error?.let { KugouMessage(it, viewModel::refresh, isError = true) }
                         KugouRadioHero(
                             song = radioSong, mode = state.radioMode, pendingMode = state.pendingRadioMode,
-                            loading = state.loading || state.radioLoading, isPlaying = radioActive && isPlaying,
-                            canPlay = radioActive || !(state.loading || state.radioLoading), canSelectMode = !state.loading,
+                            loading = state.loading || state.radioLoading, isActive = radioActive,
+                            isPlaying = radioActive && isPlaying,
                             onRefresh = ::refreshRadio, onPlay = ::toggleRadio,
-                            onSelectMode = { viewModel.selectRadioMode(it, radioLoadedCallback()) },
+                            onCycleMode = {
+                                val next = KugouRadioMode.entries[(state.radioMode.ordinal + 1) % KugouRadioMode.entries.size]
+                                val continuePlayback = radioLoadedCallback()
+                                viewModel.selectRadioMode(next) { songs, loaded ->
+                                    continuePlayback(songs, loaded)
+                                    scope.launch { snackbar.showSnackbar("已切换至「${loaded.title}」", withDismissAction = true) }
+                                }
+                            },
                         )
-                        if (state.radioLoading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
                         (state.radioError ?: data.errors["radio"] ?: data.errors["radioSongs"])?.let { message ->
                             KugouMessage(message, {
                                 val failedMode = state.radioErrorMode
@@ -242,52 +251,75 @@ fun KugouHomeScreen(
 @Composable
 private fun KugouRadioHero(
     song: MediaMetadata?, mode: KugouRadioMode, pendingMode: KugouRadioMode?, loading: Boolean,
-    isPlaying: Boolean, canPlay: Boolean, canSelectMode: Boolean,
-    onRefresh: () -> Unit, onPlay: () -> Unit, onSelectMode: (KugouRadioMode) -> Unit,
+    isActive: Boolean, isPlaying: Boolean,
+    onRefresh: () -> Unit, onPlay: () -> Unit, onCycleMode: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val gradient = if (dark) listOf(Color(0xFFB8143C), Color(0xFF7F0D29), Color(0xFF3D0613))
         else listOf(Color(0xFFE6154A), Color(0xFFC5103E), Color(0xFF990B30))
-    val subtitle = if (loading && pendingMode != null) "正在加载${pendingMode.title}…" else mode.subtitle
+    val shownMode = pendingMode ?: mode
+    val status = when {
+        loading && pendingMode != null -> "正在切换至${pendingMode.title}…"
+        isPlaying -> "正在播放 · 点击暂停"
+        isActive -> "电台已暂停 · 点击继续"
+        else -> mode.subtitle
+    }
     BoxWithConstraints(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 22.dp)
+            .shadow(14.dp, RoundedCornerShape(22.dp), ambientColor = Color(0x33E6154A), spotColor = Color(0x55E6154A))
             .clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(gradient)),
     ) {
+        // 两枚半透明光晕对应参考卡片的背景层次，不额外加载图片。
+        Box(
+            Modifier.align(Alignment.TopEnd).offset(x = 20.dp, y = (-20).dp).size(180.dp)
+                .background(Color.White.copy(alpha = 0.08f), CircleShape),
+        )
+        Box(
+            Modifier.align(Alignment.BottomEnd).offset(x = (-40).dp, y = 30.dp).size(120.dp)
+                .background(Color.White.copy(alpha = 0.05f), CircleShape),
+        )
         val narrow = maxWidth < 280.dp || LocalDensity.current.fontScale >= 1.5f
-        Column(Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(start = 16.dp, end = 12.dp, bottom = 16.dp)) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 150.dp)
+                .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) {
-                    Surface(onClick = { expanded = true }, enabled = canSelectMode, shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.18f), contentColor = Color.White) {
-                        Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Icon(Icons.Rounded.Favorite, null, Modifier.size(13.dp))
-                            Text(mode.title, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Icon(Icons.Rounded.ExpandMore, "切换酷狗电台频道", Modifier.size(16.dp))
-                        }
-                    }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        KugouRadioMode.entries.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option.title) }, enabled = canSelectMode && option != (pendingMode ?: mode),
-                                trailingIcon = { if (option == mode) Icon(Icons.Rounded.Check, null) },
-                                onClick = { expanded = false; onSelectMode(option) },
-                            )
-                        }
-                    }
+                // 胶囊直接循环频道，避免默认下拉菜单破坏红色卡片。
+                Row(
+                    Modifier.height(32.dp).clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.22f), CircleShape)
+                        .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                        .clickable(enabled = !loading, onClick = onCycleMode)
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Icon(Icons.Rounded.Favorite, null, Modifier.size(13.dp), tint = Color.White)
+                    Text(shownMode.title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(Icons.Rounded.SwapHoriz, "切换酷狗电台频道", Modifier.size(13.dp),
+                        tint = Color.White.copy(alpha = 0.8f))
                 }
-                IconButton(onClick = onRefresh, enabled = !loading) {
-                    Icon(Icons.Rounded.Refresh, "刷新${mode.title}", Modifier.size(18.dp), tint = Color.White.copy(alpha = if (loading) 0.5f else 1f))
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))
+                        .clickable(enabled = !loading, onClick = onRefresh),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (loading) CircularProgressIndicator(Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
+                    else Icon(Icons.Rounded.Refresh, "刷新${shownMode.title}", Modifier.size(16.dp), tint = Color.White)
                 }
             }
             if (narrow) {
-                KugouRadioText(song, mode, subtitle)
-                KugouRadioArtwork(song, mode, isPlaying, canPlay, loading, onPlay, Modifier.align(Alignment.End).padding(top = 12.dp))
+                KugouRadioText(song, mode, status, isPlaying)
+                KugouRadioArtwork(song, mode, isPlaying, !loading, loading, onPlay,
+                    Modifier.align(Alignment.End).padding(top = 12.dp))
             } else {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f)) { KugouRadioText(song, mode, subtitle) }
-                    KugouRadioArtwork(song, mode, isPlaying, canPlay, loading, onPlay)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) { KugouRadioText(song, mode, status, isPlaying) }
+                    KugouRadioArtwork(song, mode, isPlaying, !loading, loading, onPlay)
                 }
             }
         }
@@ -295,12 +327,28 @@ private fun KugouRadioHero(
 }
 
 @Composable
-private fun KugouRadioText(song: MediaMetadata?, mode: KugouRadioMode, subtitle: String) {
-    Text(subtitle, fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
-    Text(song?.title ?: "开启${mode.title}", modifier = Modifier.padding(top = 4.dp), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold,
-        color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-    Text(song?.artists?.joinToString("、") { it.name }?.ifBlank { "未知歌手" } ?: "点击播放，听见新的喜欢",
-        modifier = Modifier.padding(top = 3.dp), fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun KugouRadioText(song: MediaMetadata?, mode: KugouRadioMode, status: String, isPlaying: Boolean) {
+    // 作为一个整体参与父 Column 的间距分配，窄屏分行时不会把三行文字拆散。
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (isPlaying) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf(10.dp, 14.dp, 8.dp).forEach { barHeight ->
+                        Box(Modifier.width(2.5.dp).height(barHeight).clip(RoundedCornerShape(2.dp)).background(Color.White))
+                    }
+                }
+            } else {
+                Icon(Icons.Rounded.Radio, null, Modifier.size(12.dp), tint = Color.White.copy(alpha = 0.8f))
+            }
+            Text(status, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(song?.title ?: "开启${mode.title}", modifier = Modifier.padding(top = 3.dp), fontSize = 17.sp,
+            fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(song?.artists?.joinToString("、") { it.name }?.ifBlank { "未知歌手" } ?: "点击播放，听见新的喜欢",
+            modifier = Modifier.padding(top = 3.dp), fontSize = 12.sp, color = Color.White.copy(alpha = 0.82f),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable
@@ -308,21 +356,43 @@ private fun KugouRadioArtwork(
     song: MediaMetadata?, mode: KugouRadioMode, isPlaying: Boolean, enabled: Boolean, loading: Boolean,
     onPlay: () -> Unit, modifier: Modifier = Modifier,
 ) {
-    Box(modifier.size(88.dp), contentAlignment = Alignment.TopStart) {
-        // 唱片是静态主题图形，封面只使用真实返回的歌曲，不增加网络请求。
-        Box(Modifier.size(80.dp).clip(CircleShape).background(Color(0xFF12131F)), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize()) {
-                val radius = size.minDimension / 2f
-                listOf(0.9f, 0.8f, 0.7f).forEach { drawCircle(Color.White.copy(alpha = 0.15f), radius * it, style = Stroke(1.dp.toPx())) }
+    val rotation = remember { Animatable(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                rotation.animateTo(rotation.value + 360f, animationSpec = tween(16_000, easing = LinearEasing))
+                rotation.snapTo(rotation.value % 360f)
             }
-            KugouCover(song?.getThumbnailModel(), Modifier.size(58.dp), cornerRadius = 29.dp)
-            Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF12131F)))
         }
-        Surface(onClick = onPlay, enabled = enabled, modifier = Modifier.size(48.dp).align(Alignment.BottomEnd), shape = CircleShape, color = Color.White) {
-            Box(contentAlignment = Alignment.Center) {
-                if (loading && !enabled) CircularProgressIndicator(Modifier.size(22.dp), color = Color(0xFFBF103D), strokeWidth = 2.dp)
-                else Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    if (isPlaying) "暂停${mode.title}" else "播放${mode.title}", Modifier.size(26.dp), tint = Color(0xFFBF103D))
+    }
+    Box(modifier.size(82.dp)) {
+        Box(
+            Modifier.align(Alignment.TopStart).size(78.dp)
+                .shadow(6.dp, CircleShape, ambientColor = Color(0x59000000), spotColor = Color(0x59000000))
+                .clip(CircleShape).background(Color(0xFF12131F))
+                .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            // 封面只使用真实返回的歌曲图；播放时唱片缓慢旋转，暂停后保留角度。
+            KugouCover(song?.getThumbnailModel(),
+                Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.value % 360f }, cornerRadius = 39.dp)
+            Box(
+                Modifier.size(18.dp).clip(CircleShape).background(Color(0xFF0E0F16))
+                    .border(2.dp, Color.White.copy(alpha = 0.4f), CircleShape),
+            )
+        }
+        Box(
+            Modifier.align(Alignment.BottomEnd).size(40.dp).clip(CircleShape)
+                .clickable(enabled = enabled, onClick = onPlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(Modifier.size(36.dp), shape = CircleShape, color = Color.White, shadowElevation = 6.dp) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = Color(0xFFE6154A), strokeWidth = 2.dp)
+                    else Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        if (isPlaying) "暂停${mode.title}" else "播放${mode.title}",
+                        Modifier.size(20.dp), tint = Color(0xFFE6154A))
+                }
             }
         }
     }
