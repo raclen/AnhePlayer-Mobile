@@ -57,6 +57,14 @@
 - **适用范围**：当前二次开发分支的 Android 构建。
 - 不主动打包 APK。如果打包，需要增加版本号，并同时输出 arm64-v8a 与 armeabi-v7a 两份 core 包，不打 universal、x86 或 full。应用内更新检查仍以已上传的 `arm64-v8a-release` APK 作为该版本已发布的依据。
 
+## CI 原生工具链必须显式安装
+
+- **触发信号**：GitHub Actions 的 TagLib 原生任务报告 `CXX1300`，或 runner 镜像更新后找不到模块声明的 CMake / NDK。
+- **根因/约束**：TagLib 固定声明 CMake 3.31.6 和 NDK 29.0.13113456（r29-beta1）；runner 预装组件不保证覆盖这些版本，Kotlin 编译与非 UI 单测也不会完整验证 Release 原生打包。
+- **正确做法**：正式、预发布和 Debug 工作流都必须在 Gradle 构建前通过 sdkmanager 安装模块声明的具体版本，接受相应 SDK 许可证；固定 beta NDK 使用 beta 渠道，不随意替换模块版本或跳过原生构建。模块工具链变更时同步更新全部工作流。
+- **验证方式**：安装后输出 CMake 版本；本地 `:app:assembleCoreRelease` 完整通过，并检查两架构 APK、正式签名及版本号；远程确认工作流已启动，不持续轮询构建。
+- **适用范围**：`taglib/build.gradle.kts`、三个 Android 打包工作流和正式发布验证。
+
 ## 本地 Android 构建使用临时 JDK 与 SDK
 
 - **触发信号**：本地执行 Gradle 编译或打包，且系统未配置 `JAVA_HOME`、`ANDROID_HOME`。

@@ -1,3 +1,14 @@
+# AnhePlayer v2.0.19
+
+## 修复正式包构建
+
+- 修复 GitHub Actions 缺少项目固定 CMake 3.31.6，导致 TagLib 的 arm64-v8a / armeabi-v7a 原生构建失败的问题。
+- 正式、预发布与 Debug 工作流显式安装 CMake 3.31.6 和项目固定的 NDK r29-beta1，并在构建前输出 CMake 版本；不依赖 runner 预装工具，也不升级项目依赖。
+- 保留 v2.0.18 的全部酷狗专区与汽水／洛雪兼容功能；v2.0.18 未生成正式 APK，本次以新版本重新发布，不覆盖旧 tag。
+- 正式包仍分别提供 arm64-v8a、armeabi-v7a 两份 core APK，不提供 universal、x86 或 full 包。
+- 本地完整 core Release 打包通过，两份 APK 的版本、原生 ELF 架构与正式签名校验通过；54 项非 UI 单测及 15 个汽水桥接回归场景通过。
+- UI 与账号路径未作改动，真实登录、每日 VIP 领取、连续后台播放及下载隔离仍需人工验收。
+
 # AnhePlayer v2.0.18
 
 ## 酷狗概念版专区

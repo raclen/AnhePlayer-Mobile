@@ -30,7 +30,13 @@ jobs:
           cache: 'gradle'
 
       - name: Accept SDK licenses
-        run: yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        run: yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --channel=1 --licenses
+
+      # TagLib 固定使用 r29-beta1；允许 beta 渠道，但只安装项目声明的具体版本。
+      - name: Install pinned native build tools
+        run: |
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --channel=1 --install "cmake;3.31.6" "ndk;29.0.13113456"
+          /usr/local/lib/android/sdk/cmake/3.31.6/bin/cmake --version
 
       - name: Setup signing configs
         if: env.HAS_RELEASE_SIGNING == 'true'
