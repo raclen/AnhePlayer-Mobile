@@ -17,9 +17,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.ConnectException
+import java.net.UnknownHostException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -42,6 +46,8 @@ internal class KugouApiException(
 internal class KugouApi(private val session: () -> KugouSession) {
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS).followRedirects(false).build()
+    // 短信与领取等写请求不能在未知结果后由网络库自动重发。
+    private val writeClient = client.newBuilder().retryOnConnectionFailure(false).build()
     @Volatile private var serverOffset = 0L
     @Volatile var hasConfirmedServerTime = false
         private set
@@ -68,13 +74,14 @@ internal class KugouApi(private val session: () -> KugouSession) {
         return parsed
     }
 
-    suspend fun raw(
+    internal fun buildRequest(
         path: String, query: Map<String, String>, body: String, post: Boolean,
         host: String = "gateway.kugou.com", router: String? = null, web: Boolean = false,
         includeAccount: Boolean = true, defaults: Boolean = true, extraHeaders: Map<String, String> = emptyMap(),
         sessionOverride: KugouSession? = null,
-    ): ByteArray {
-        require(host in setOf("gateway.kugou.com", "userservice.kugou.com", "login-user.kugou.com", "login.user.kugou.com", "loginserviceretry.kugou.com", "kugouvip.kugou.com", "lyrics.kugou.com"))
+    ): Request {
+        // 带点号的登录服务没有匹配的 TLS 证书，只能作为官方网关的 x-router 使用。
+        require(host in setOf("gateway.kugou.com", "userservice.kugou.com", "login-user.kugou.com", "loginserviceretry.kugou.com", "kugouvip.kugou.com", "lyrics.kugou.com"))
         val current = sessionOverride ?: session()
         val time = (serverNow / 1000).toString()
         val params = linkedMapOf<String, String>()
@@ -94,12 +101,22 @@ internal class KugouApi(private val session: () -> KugouSession) {
         router?.let { builder.header("x-router", it) }
         extraHeaders.forEach { (key, value) -> builder.header(key, value) }
         if (post) builder.post(body.toRequestBody((if (body.startsWith("{")) "application/json; charset=utf-8" else "text/plain; charset=utf-8").toMediaType()))
-        val call = client.newCall(builder.build())
+        return builder.build()
+    }
+
+    suspend fun raw(
+        path: String, query: Map<String, String>, body: String, post: Boolean,
+        host: String = "gateway.kugou.com", router: String? = null, web: Boolean = false,
+        includeAccount: Boolean = true, defaults: Boolean = true, extraHeaders: Map<String, String> = emptyMap(),
+        sessionOverride: KugouSession? = null,
+    ): ByteArray {
+        val request = buildRequest(path, query, body, post, host, router, web, includeAccount, defaults, extraHeaders, sessionOverride)
+        val call = (if (post) writeClient else client).newCall(request)
         return suspendCancellableCoroutine { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(IOException("酷狗连接失败，请检查网络或稍后重试"))
+                    if (continuation.isActive) continuation.resumeWithException(connectionFailure(e))
                 }
                 override fun onResponse(call: Call, response: Response) {
                     response.use {
@@ -108,7 +125,9 @@ internal class KugouApi(private val session: () -> KugouSession) {
                             updateServerTime(response.header("Date"))
                             if (response.header("ssa-code") != null) throw KugouApiException(20028, "账号需要安全验证，请前往官方酷狗 APP 完成")
                             if (!response.isSuccessful) throw IOException("酷狗请求失败（HTTP ${response.code}）")
-                            val bytes = response.body?.bytes() ?: throw IOException("酷狗接口没有返回内容")
+                            val bytes = response.body?.let { body ->
+                                try { body.bytes() } catch (e: IOException) { throw connectionFailure(e) }
+                            } ?: throw IOException("酷狗接口没有返回内容")
                             if (continuation.isActive) continuation.resume(bytes)
                         } catch (e: Exception) {
                             if (continuation.isActive) continuation.resumeWithException(e)
@@ -117,6 +136,18 @@ internal class KugouApi(private val session: () -> KugouSession) {
                 }
             })
         }
+    }
+
+    internal fun connectionFailure(error: IOException): IOException {
+        // 只按异常类型分类，不保留可能带手机号、token 或完整 URL 的底层消息与 cause。
+        val message = when (error) {
+            is UnknownHostException -> "酷狗域名解析失败，请检查网络或 DNS 设置"
+            is SSLException -> "酷狗安全连接失败，请检查系统时间或网络代理"
+            is InterruptedIOException -> "酷狗请求超时，请检查网络后重试"
+            is ConnectException -> "无法连接酷狗服务，请检查网络或稍后重试"
+            else -> "酷狗连接中断，请检查网络或稍后重试"
+        }
+        return IOException(message)
     }
 
     internal fun updateServerTime(date: String?) {

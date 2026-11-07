@@ -161,7 +161,7 @@ object KugouConcept {
     suspend fun requestSms(mobile: String) {
         require(mobile.matches(Regex("1\\d{10}"))) { "请输入正确的手机号" }
         ensureDevice()
-        api.request("/v7/send_mobile_code", host = "login.user.kugou.com", post = true, includeAccount = false,
+        api.request("/v7/send_mobile_code", router = "login.user.kugou.com", post = true, includeAccount = false,
             body = buildJsonObject { put("businessid", 5); put("mobile", mobile); put("plat", 3) })
     }
     suspend fun loginWithSms(mobile: String, code: String, userId: String? = null) {
@@ -214,7 +214,7 @@ object KugouConcept {
         preferences.edit().putLong(attemptKey, now).apply()
         try {
             val key = KugouCrypto.randomKey(16)
-            val response = api.request("/v5/login_by_token", host = "login.user.kugou.com",
+            val response = api.request("/v5/login_by_token", router = "login.user.kugou.com",
                 body = KugouLoginProtocol.renewBody(current, now, Build.DEVICE, key), sessionOverride = current)
             checkVersion(expected)
             val data = KugouLoginProtocol.unpack(response.obj("data"), key)

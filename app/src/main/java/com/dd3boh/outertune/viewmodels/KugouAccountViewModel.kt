@@ -97,7 +97,7 @@ class KugouAccountViewModel @Inject constructor() : ViewModel() {
         }
         if (mutableState.value.cooldown > 0 || mutableState.value.busy) return
         // 只有界面上的发送按钮调用此方法，不随输入或页面打开发送短信。
-        perform {
+        perform(progressMessage = "正在请求短信验证码…") {
             KugouConcept.requestSms(mobile)
             currentCoroutineContext().ensureActive()
             mutableState.update { it.copy(message = "验证码已发送，请留意短信", cooldown = 60) }
@@ -140,18 +140,18 @@ class KugouAccountViewModel @Inject constructor() : ViewModel() {
         mutableState.update { it.copy(qr = null, polling = false, busy = false, accounts = emptyList(), message = "", error = null) }
     }
 
-    private fun perform(block: suspend () -> Unit) {
+    private fun perform(progressMessage: String = "", block: suspend () -> Unit) {
         if (mutableState.value.busy) return
         operation?.cancel()
         val request = ++generation
-        mutableState.update { it.copy(busy = true, qr = null, polling = false, error = null) }
+        mutableState.update { it.copy(busy = true, qr = null, polling = false, message = progressMessage, error = null) }
         operation = viewModelScope.launch {
             try {
                 block()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                if (request == generation) mutableState.update { it.copy(error = error.message ?: "操作失败，请重试") }
+                if (request == generation) mutableState.update { it.copy(message = "", error = error.message ?: "操作失败，请重试") }
             } finally {
                 if (request == generation) mutableState.update { it.copy(busy = false) }
             }

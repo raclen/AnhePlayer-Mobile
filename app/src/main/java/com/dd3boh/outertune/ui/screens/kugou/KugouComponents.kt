@@ -1,7 +1,10 @@
 package com.dd3boh.outertune.ui.screens.kugou
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,8 +21,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -27,6 +37,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +58,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -128,58 +142,150 @@ internal fun CancelOnKugouPageStop(onStop: () -> Unit) {
 
 @Composable
 internal fun KugouSectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        if (action != null) TextButton(onClick = onAction) { Text(action) }
-    }
-}
-
-@Composable
-internal fun KugouMessage(message: String, retry: (() -> Unit)? = null) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (retry != null) TextButton(onClick = retry) { Text("重试") }
-    }
-}
-
-@Composable
-internal fun KugouPageFooter(loading: Boolean, hasMore: Boolean, error: String?, onMore: () -> Unit) {
-    when {
-        loading -> Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(12.dp))
-            Text("正在加载…", style = MaterialTheme.typography.bodyMedium)
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 24.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (action != null) {
+            TextButton(onClick = onAction, modifier = Modifier.heightIn(min = 48.dp)) { Text(action) }
         }
-        error != null -> KugouMessage(error, onMore)
-        hasMore -> TextButton(onClick = onMore, modifier = Modifier.padding(horizontal = 8.dp)) { Text("加载更多") }
     }
 }
 
 @Composable
-internal fun KugouCover(url: Any?, modifier: Modifier = Modifier) {
-    Box(modifier.clip(RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+internal fun KugouMessage(message: String, retry: (() -> Unit)? = null, isError: Boolean = false) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
+        contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Column(
+            Modifier.padding(horizontal = if (isError) 12.dp else 0.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                if (isError) {
+                    Icon(Icons.Rounded.ErrorOutline, null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            }
+            if (retry != null) {
+                TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("重试") }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun KugouLoadingStatus(message: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+internal fun KugouPageFooter(loading: Boolean, hasMore: Boolean, error: String?, onMore: () -> Unit, page: Int = 0) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        if (page > 0) {
+            Text(
+                "已加载第 $page 页${if (!hasMore && error == null && !loading) "，列表已加载完" else ""}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+        when {
+            loading -> KugouLoadingStatus("正在加载…", Modifier.padding(horizontal = 16.dp))
+            error != null -> KugouMessage(error, onMore, isError = true)
+            hasMore -> OutlinedButton(
+                onClick = onMore,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 48.dp),
+            ) { Text("加载更多") }
+        }
+    }
+}
+
+@Composable
+internal fun KugouCover(url: Any?, modifier: Modifier = Modifier, cornerRadius: Dp = 8.dp) {
+    Box(
+        modifier.clip(RoundedCornerShape(cornerRadius)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
         AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
 }
 
 @Composable
+internal fun KugouCollectionTile(collection: KugouCollection, navController: NavController, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).clickable { navController.navigate(collectionRoute("playlist", collection.id)) }
+            .padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        KugouCover(collection.coverUrl, Modifier.fillMaxWidth().aspectRatio(1f), cornerRadius = 12.dp)
+        Text(
+            collection.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleSmall,
+        )
+        if (collection.description.isNotBlank()) {
+            Text(
+                collection.description, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 internal fun KugouCollectionRow(collection: KugouCollection, type: String, navController: NavController, preview: Boolean = false) {
-    Row(Modifier.fillMaxWidth().clickable { navController.navigate(collectionRoute(type, collection.id)) }
-        .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        KugouCover(collection.coverUrl, Modifier.size(if (preview) 76.dp else 64.dp))
-        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        Modifier.fillMaxWidth().clickable { navController.navigate(collectionRoute(type, collection.id)) }
+            .heightIn(min = 80.dp).padding(horizontal = 16.dp, vertical = if (preview) 14.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KugouCover(collection.coverUrl, Modifier.size(if (preview) 96.dp else 68.dp), cornerRadius = if (preview) 12.dp else 8.dp)
+        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(collection.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (preview && collection.songs.isNotEmpty()) {
-                Text(collection.songs.take(3).joinToString("\n") { it.title }, maxLines = 3,
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("摘要预览 · 点击查看完整榜单", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                collection.songs.take(3).forEachIndexed { index, song ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${index + 1}", modifier = Modifier.width(20.dp),
+                            style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                            color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             } else if (collection.description.isNotBlank()) {
                 Text(collection.description, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (preview) {
+                Text(
+                    if (collection.songs.isNotEmpty()) "歌曲摘要，打开查看完整榜单" else "打开查看完整榜单",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (!preview) {
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp).size(20.dp))
         }
     }
 }
@@ -223,7 +329,7 @@ internal fun rememberKugouPlayback(navController: NavController): (List<MediaMet
 private class KugouPlaybackPreparation(var job: Job? = null)
 
 @Composable
-internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onPlay: () -> Unit, sourceLabel: String = "酷狗概念版") {
+internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onPlay: () -> Unit, sourceLabel: String = "酷狗概念版", trackNumber: Int? = null) {
     val database = LocalDatabase.current
     val player = LocalPlayerConnection.current
     val snackbar = LocalSnackbarHostState.current
@@ -266,21 +372,43 @@ internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onP
         }
     }
 
-    Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onPlay).heightIn(min = 80.dp)
+            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (trackNumber != null) {
+            Text(
+                trackNumber.toString(), style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp),
+            )
+        }
         KugouCover(song.getThumbnailModel(), Modifier.size(52.dp))
         Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f),
+                )
+                if (liked) {
+                    Icon(Icons.Rounded.Favorite, "已保存在本地喜欢", tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 6.dp).size(14.dp))
+                }
+            }
             Text(song.artists.joinToString("、") { it.name }.ifBlank { "未知歌手" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(sourceLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Box {
-            IconButton(onClick = { expanded = true }, enabled = !saving) { Icon(Icons.Rounded.MoreVert, "${song.title}的操作") }
+            IconButton(onClick = { expanded = true }, enabled = !saving, modifier = Modifier.size(48.dp)) {
+                if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Rounded.MoreVert, "${song.title}的操作")
+            }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DropdownMenuItem(text = { Text("下一首播放") }, onClick = { expanded = false; enqueue(true) })
-                DropdownMenuItem(text = { Text("加入播放队列") }, onClick = { expanded = false; enqueue(false) })
-                DropdownMenuItem(text = { Text(if (liked) "取消本地喜欢" else "喜欢（保存在本地）") }, onClick = {
+                DropdownMenuItem(text = { Text("下一首播放") }, leadingIcon = { Icon(Icons.Rounded.SkipNext, null) }, onClick = { expanded = false; enqueue(true) })
+                DropdownMenuItem(text = { Text("加入播放队列") }, leadingIcon = { Icon(Icons.Rounded.QueueMusic, null) }, onClick = { expanded = false; enqueue(false) })
+                DropdownMenuItem(text = { Text(if (liked) "取消本地喜欢" else "喜欢（保存在本地）") },
+                    leadingIcon = { Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, null) }, onClick = {
                     expanded = false
                     saveAndAct {
                         withContext(Dispatchers.IO) {
@@ -289,7 +417,7 @@ internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onP
                         }
                     }
                 })
-                DropdownMenuItem(text = { Text("加入本地歌单") }, onClick = { expanded = false; saveAndAct { showPlaylist = true } })
+                DropdownMenuItem(text = { Text("加入本地歌单") }, leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) }, onClick = { expanded = false; saveAndAct { showPlaylist = true } })
             }
         }
     }
