@@ -1,6 +1,8 @@
 package com.dd3boh.outertune.ui.screens.kugou
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,27 +16,26 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,11 +43,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.dd3boh.outertune.LocalSnackbarHostState
@@ -79,105 +85,121 @@ fun KugouHomeScreen(
         }
     }
     // 主导航的标题栏由 MainActivity 提供，首页只绘制内容。
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = kugouContentPadding()) {
-        item("search") {
-            Surface(
-                onClick = { navController.navigate("kugou/search") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                Row(Modifier.heightIn(min = 64.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.primary)
-                    Text("搜索歌曲、歌单", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        }
-        item("refresh") {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (state.loading) "正在更新推荐…" else "发现合口味的音乐",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = viewModel::refresh, enabled = !state.loading, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("刷新推荐")
-                }
-            }
-            if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
-            state.error?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-        }
-        item("radio") {
-            KugouRadioHero(data.radioSongs) { playSection(data.radioSongs, "红心电台") }
-            (data.errors["radio"] ?: data.errors["radioSongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-            if (data.radioSongs.isEmpty() && !state.loading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "暂无个人推荐，请稍后刷新。" else "个人推荐需要账号授权，可通过设置管理账号。")
-        }
-        itemsIndexed(data.radioSongs.take(3), key = { _, song -> "radio_${song.id}" }) { index, song ->
-            KugouSongRow(song, navController, onPlay = { playback(data.radioSongs, index, "红心电台") })
-        }
-        item("daily_title") {
-            KugouSectionTitle("每日推荐", "播放全部") { playSection(data.dailySongs, "每日推荐") }
-            (data.errors["daily"] ?: data.errors["dailySongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-            if (data.dailySongs.isEmpty() && !state.loading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "今日暂无推荐，请稍后刷新。" else "每日推荐需要账号授权，可通过设置管理账号。")
-        }
-        itemsIndexed(data.dailySongs, key = { _, song -> "daily_${song.id}" }) { index, song ->
-            KugouSongRow(song, navController, onPlay = { playback(data.dailySongs, index, "每日推荐") })
-        }
-        item("playlists_title") {
-            KugouSectionTitle("推荐歌单", "更多") { navController.navigate("kugou/browse/playlists") }
-            data.errors["playlists"]?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-            if (data.playlists.isEmpty() && !state.loading) KugouMessage("暂无推荐歌单，请稍后刷新。")
-        }
-        item("playlists") {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(data.playlists, key = { it.id }) { collection ->
-                    KugouCollectionTile(collection, navController, Modifier.width(152.dp))
-                }
-            }
-        }
-        item("ranks_title") {
-            KugouSectionTitle("排行榜", "全部榜单") { navController.navigate("kugou/browse/ranks") }
-            data.errors["ranks"]?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-            if (data.ranks.isEmpty() && !state.loading) KugouMessage("暂无榜单，请稍后刷新。")
-        }
-        itemsIndexed(data.ranks, key = { _, collection -> "rank_${collection.id}" }) { index, collection ->
-            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-            KugouCollectionRow(collection, "rank", navController, preview = true)
-        }
-        item("new_title") {
-            KugouSectionTitle("新歌速递", "播放全部") { playSection(data.newSongs, "新歌速递") }
-            (data.errors["new"] ?: data.errors["newSongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
-            if (data.newSongs.isEmpty() && !state.loading) KugouMessage("暂无新歌，请稍后刷新。")
-        }
-        itemsIndexed(data.newSongs, key = { _, song -> "new_${song.id}" }) { index, song ->
-            KugouSongRow(song, navController, onPlay = { playback(data.newSongs, index, "新歌速递") })
-        }
-    }
-}
-
-@Composable
-private fun KugouRadioHero(songs: List<MediaMetadata>, onPlay: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    ) {
-        BoxWithConstraints(Modifier.padding(20.dp)) {
-            val horizontal = maxWidth >= 300.dp && LocalDensity.current.fontScale < 1.3f
-            if (horizontal) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    KugouRadioArtwork(songs.firstOrNull(), Modifier.size(120.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        KugouRadioText(songs.firstOrNull())
-                        KugouRadioPlayButton(onPlay)
+    KugouTheme {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            BoxWithConstraints(Modifier.widthIn(max = 800.dp).fillMaxWidth()) {
+                val contentWidth = maxWidth - 32.dp
+                val columns = if (contentWidth >= 648.dp) 3 else if (contentWidth >= 300.dp && LocalDensity.current.fontScale < 1.3f) 2 else 1
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = kugouContentPadding()) {
+                    item("search") {
+                        Surface(
+                            onClick = { navController.navigate("kugou/search") },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                        ) {
+                            Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Search, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("搜索歌曲、歌手、歌单", Modifier.weight(1f).padding(start = 9.dp), fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    item("radio") {
+                        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                        state.error?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        KugouRadioHero(data.radioSongs, state.loading, viewModel::refresh) { playSection(data.radioSongs, "红心电台") }
+                        (data.errors["radio"] ?: data.errors["radioSongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        if (data.radioSongs.isEmpty() && !state.loading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "暂无个人推荐，请稍后刷新。" else "登录酷狗账号，开启个人推荐。账号可在设置中管理。")
+                    }
+                    item("daily_title") {
+                        KugouSectionTitle("每日推荐", "播放全部", subtitle = "根据你的口味每天更新") { playSection(data.dailySongs, "每日推荐") }
+                        (data.errors["daily"] ?: data.errors["dailySongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        if (data.dailySongs.isEmpty() && !state.loading) KugouMessage(if (account.status == KugouAccountStatus.SIGNED_IN) "今日暂无推荐，请稍后刷新。" else "每日推荐需要账号授权，可通过设置管理账号。")
+                    }
+                    item("daily") {
+                        // 仅布局分组；点选仍使用完整推荐队列和原始索引，不截断播放列表。
+                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            itemsIndexed(data.dailySongs.chunked(6), key = { index, _ -> "daily_page_$index" }) { page, songs ->
+                                KugouCard(Modifier.width(contentWidth)) {
+                                    Column(Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+                                        songs.forEachIndexed { index, song ->
+                                            KugouSongRow(song, navController, onPlay = { playback(data.dailySongs, page * 6 + index, "每日推荐") })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item("playlists_title") {
+                        KugouSectionTitle("推荐歌单", "更多", subtitle = "此刻大家都在收藏") { navController.navigate("kugou/browse/playlists") }
+                        data.errors["playlists"]?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        if (data.playlists.isEmpty() && !state.loading) KugouMessage("暂无推荐歌单，请稍后刷新。")
+                    }
+                    items(data.playlists.chunked(columns), key = { row -> "playlists_${row.first().id}" }) { row ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            row.forEach { collection -> KugouCollectionTile(collection, navController, Modifier.weight(1f)) }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                    item("ranks_title") {
+                        KugouSectionTitle("排行榜", "全部榜单", subtitle = "现在大家都在听什么") { navController.navigate("kugou/browse/ranks") }
+                        data.errors["ranks"]?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        if (data.ranks.isEmpty() && !state.loading) KugouMessage("暂无榜单，请稍后刷新。")
+                    }
+                    item("ranks") {
+                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(data.ranks, key = { it.id }) { collection ->
+                                KugouCard(Modifier.width(contentWidth.coerceAtMost(360.dp))) {
+                                    KugouCollectionRow(collection, "rank", navController, preview = true)
+                                }
+                            }
+                        }
+                    }
+                    item("new_title") {
+                        KugouSectionTitle("新歌速递", "播放全部", subtitle = "最新上架的好声音") { playSection(data.newSongs, "新歌速递") }
+                        (data.errors["new"] ?: data.errors["newSongs"])?.let { KugouMessage(it, viewModel::refresh, isError = true) }
+                        if (data.newSongs.isEmpty() && !state.loading) KugouMessage("暂无新歌，请稍后刷新。")
+                    }
+                    itemsIndexed(data.newSongs, key = { _, song -> "new_${song.id}" }) { index, song ->
+                        KugouSongRow(song, navController, onPlay = { playback(data.newSongs, index, "新歌速递") })
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KugouRadioHero(songs: List<MediaMetadata>, loading: Boolean, onRefresh: () -> Unit, onPlay: () -> Unit) {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val gradient = if (dark) listOf(Color(0xFFB8143C), Color(0xFF7F0D29), Color(0xFF3D0613))
+        else listOf(Color(0xFFE6154A), Color(0xFFC5103E), Color(0xFF990B30))
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 22.dp)
+            .clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(gradient)),
+    ) {
+        val narrow = maxWidth < 280.dp || LocalDensity.current.fontScale >= 1.5f
+        Column(Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(start = 16.dp, end = 12.dp, bottom = 16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.18f), contentColor = Color.White) {
+                    Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Icon(Icons.Rounded.Favorite, null, Modifier.size(13.dp))
+                        Text("红心电台", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onRefresh, enabled = !loading) {
+                    Icon(Icons.Rounded.Refresh, "刷新酷狗推荐", Modifier.size(18.dp), tint = Color.White.copy(alpha = if (loading) 0.5f else 1f))
+                }
+            }
+            if (narrow) {
+                KugouRadioText(songs.firstOrNull())
+                KugouRadioArtwork(songs.firstOrNull(), onPlay, Modifier.align(Alignment.End).padding(top = 12.dp))
             } else {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    KugouRadioArtwork(songs.firstOrNull(), Modifier.size(144.dp).align(Alignment.CenterHorizontally))
-                    KugouRadioText(songs.firstOrNull())
-                    KugouRadioPlayButton(onPlay)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) { KugouRadioText(songs.firstOrNull()) }
+                    KugouRadioArtwork(songs.firstOrNull(), onPlay)
                 }
             }
         }
@@ -185,46 +207,30 @@ private fun KugouRadioHero(songs: List<MediaMetadata>, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun KugouRadioText(firstSong: MediaMetadata?) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(Icons.Rounded.Favorite, null, modifier = Modifier.size(16.dp))
-        Text("按你的口味推荐", style = MaterialTheme.typography.labelMedium)
-    }
-    Text("红心电台", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-    firstSong?.let {
-        Text(it.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-    }
+private fun KugouRadioText(song: MediaMetadata?) {
+    Text("按你的口味，发现心动旋律", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+    Text(song?.title ?: "开启私人红心漫游", modifier = Modifier.padding(top = 4.dp), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold,
+        color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Text(song?.artists?.joinToString("、") { it.name }?.ifBlank { "未知歌手" } ?: "点击播放，听见新的喜欢",
+        modifier = Modifier.padding(top = 3.dp), fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
-private fun KugouRadioPlayButton(onPlay: () -> Unit) {
-    Button(
-        onClick = onPlay, modifier = Modifier.heightIn(min = 48.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-    ) {
-        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(24.dp))
-        Spacer(Modifier.width(6.dp))
-        Text("播放电台")
-    }
-}
-
-@Composable
-private fun KugouRadioArtwork(song: MediaMetadata?, modifier: Modifier = Modifier) {
-    val record = MaterialTheme.colorScheme.surfaceContainerHighest
-    val groove = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
-    val label = MaterialTheme.colorScheme.primary
-    val spindle = MaterialTheme.colorScheme.onPrimary
-    Box(modifier, contentAlignment = Alignment.Center) {
+private fun KugouRadioArtwork(song: MediaMetadata?, onPlay: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.size(88.dp), contentAlignment = Alignment.TopStart) {
         // 唱片是静态主题图形，封面只使用真实返回的歌曲，不增加网络请求。
-        Canvas(Modifier.fillMaxSize().padding(start = 20.dp)) {
-            val radius = size.minDimension / 2f
-            drawCircle(record, radius)
-            listOf(0.82f, 0.68f, 0.54f).forEach { scale ->
-                drawCircle(groove, radius * scale, style = Stroke(1.dp.toPx()))
+        Box(Modifier.size(80.dp).clip(CircleShape).background(Color(0xFF12131F)), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val radius = size.minDimension / 2f
+                listOf(0.9f, 0.8f, 0.7f).forEach { drawCircle(Color.White.copy(alpha = 0.15f), radius * it, style = Stroke(1.dp.toPx())) }
             }
-            drawCircle(label, radius * 0.3f)
-            drawCircle(spindle, radius * 0.055f)
+            KugouCover(song?.getThumbnailModel(), Modifier.size(58.dp), cornerRadius = 29.dp)
+            Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF12131F)))
         }
-        KugouCover(song?.getThumbnailModel(), Modifier.fillMaxSize(0.76f).align(Alignment.CenterStart), cornerRadius = 12.dp)
+        Surface(onClick = onPlay, modifier = Modifier.size(48.dp).align(Alignment.BottomEnd), shape = CircleShape, color = Color.White) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.PlayArrow, "播放红心电台", Modifier.size(26.dp), tint = Color(0xFFBF103D))
+            }
+        }
     }
 }

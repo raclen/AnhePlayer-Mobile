@@ -913,7 +913,8 @@ class MusicService : MediaLibraryService(),
         if (conceptId != null) conceptStreams.remove(conceptId)
         Toast.makeText(
             this@MusicService,
-            if (conceptId != null) "酷狗播放失败（${error.errorCode}），请检查账号、网络或歌曲权限"
+            if (conceptId != null) com.dd3boh.outertune.source.kugou.KugouPlaybackProtocol.safeFailure(error)
+                ?: "酷狗音频连接失败（${error.errorCode}），请检查网络后重试；若持续失败，请刷新推荐或确认歌曲权限"
             else "plr: ${error.message} (${error.errorCode}): ${error.cause?.message ?: ""} ",
             Toast.LENGTH_LONG
         ).show()

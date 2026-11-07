@@ -3,8 +3,6 @@ package com.dd3boh.outertune.ui.screens.kugou
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,21 +12,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,7 +50,7 @@ import com.dd3boh.outertune.source.kugou.KugouConcept
 import com.dd3boh.outertune.source.kugou.KugouSearchType
 import com.dd3boh.outertune.viewmodels.KugouSearchViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KugouSearchScreen(
     navController: NavController,
@@ -80,33 +79,39 @@ fun KugouSearchScreen(
     KugouScreenFrame("酷狗搜索", navController, scrollBehavior) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = kugouContentPadding()) {
             item("input") {
-                OutlinedTextField(
-                    value = state.query, onValueChange = viewModel::updateQuery,
-                    label = { Text("搜索歌曲、歌单") }, placeholder = { Text("歌名、歌手或歌单") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submit() }),
-                    trailingIcon = { IconButton(onClick = { submit() }, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Search, "搜索并记录历史") } },
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                FlowRow(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    FilterChip(
-                        selected = state.type == KugouSearchType.SONG, onClick = { viewModel.selectType(KugouSearchType.SONG) },
-                        label = { Text("歌曲") }, leadingIcon = { Icon(Icons.Rounded.MusicNote, null, Modifier.size(18.dp)) },
-                        modifier = Modifier.heightIn(min = 48.dp),
+                    BasicTextField(
+                        value = state.query, onValueChange = viewModel::updateQuery, singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { submit() }),
+                        decorationBox = { input ->
+                            Row(Modifier.heightIn(min = 48.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                                    if (state.query.isEmpty()) Text("搜索歌曲、歌手、歌单", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    input()
+                                }
+                                if (state.query.isNotEmpty()) IconButton(onClick = { viewModel.updateQuery("") }) {
+                                    Icon(Icons.Rounded.Close, "清除搜索文字", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { submit() }) { Icon(Icons.Rounded.Search, "搜索并记录历史", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
+                            }
+                        },
                     )
-                    FilterChip(
-                        selected = state.type == KugouSearchType.PLAYLIST, onClick = { viewModel.selectType(KugouSearchType.PLAYLIST) },
-                        label = { Text("歌单") }, leadingIcon = { Icon(Icons.Rounded.QueueMusic, null, Modifier.size(18.dp)) },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                    )
+                }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    KugouSegmentedControl(listOf("歌曲", "歌单"), if (state.type == KugouSearchType.SONG) 0 else 1) {
+                        viewModel.selectType(if (it == 0) KugouSearchType.SONG else KugouSearchType.PLAYLIST)
+                    }
                 }
             }
             if (state.query.isBlank()) {
-                item("history_title") { KugouSectionTitle("搜索历史", if (history.isNotEmpty()) "清空" else null, viewModel::clearHistory) }
+                item("history_title") { KugouSectionTitle("搜索历史", if (history.isNotEmpty()) "清空" else null, onAction = viewModel::clearHistory) }
                 items(history.take(20), key = { "history_${it.id}" }) { entry ->
                     Row(
                         Modifier.fillMaxWidth().clickable { submit(entry.query) }.heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp),

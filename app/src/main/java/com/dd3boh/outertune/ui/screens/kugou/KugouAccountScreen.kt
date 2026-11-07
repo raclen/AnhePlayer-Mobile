@@ -2,11 +2,19 @@ package com.dd3boh.outertune.ui.screens.kugou
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -36,7 +44,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -80,7 +87,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KugouAccountScreen(
     navController: NavController,
@@ -123,63 +130,52 @@ fun KugouAccountScreen(
     KugouScreenFrame("酷狗账号", navController, scrollBehavior) {
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = kugouContentPadding()) {
             item("account") {
-                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Text(
-                            when (account.status) {
-                                KugouAccountStatus.SIGNED_OUT -> "尚未授权"
-                                KugouAccountStatus.RESTORING -> "正在恢复账号"
-                                KugouAccountStatus.SIGNED_IN -> "账号已连接"
-                                KugouAccountStatus.EXPIRED -> "账号授权已过期"
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (account.status == KugouAccountStatus.EXPIRED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        )
+                KugouCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(64.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary) }
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(if (signedIn) account.nickname.ifBlank { "酷狗账号" } else "登录酷狗账号",
+                                    fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                account.userId?.let {
+                                    Text("ID $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(
+                                    when (account.status) {
+                                        KugouAccountStatus.SIGNED_OUT -> "尚未登录"
+                                        KugouAccountStatus.RESTORING -> "正在恢复账号"
+                                        KugouAccountStatus.SIGNED_IN -> "账号已连接"
+                                        KugouAccountStatus.EXPIRED -> "授权已过期，请重新登录"
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (account.status == KugouAccountStatus.EXPIRED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Lock, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("仅用于概念版在线播放，账号凭据在本机加密保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (account.status == KugouAccountStatus.RESTORING) KugouLoadingStatus("正在恢复本地加密会话…")
                     }
-                    Text(
-                        if (signedIn) account.nickname.ifBlank { "已登录酷狗账号" } else "登录酷狗账号",
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-                    )
-                    account.userId?.let {
-                        Text("账号 ID：$it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(
-                        "账号授权用于酷狗概念版在线播放，凭据加密保存在此设备。",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (account.status == KugouAccountStatus.EXPIRED) {
-                        Text("请重新扫码或使用短信登录。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                    }
-                    if (account.status == KugouAccountStatus.RESTORING) KugouLoadingStatus("正在恢复本地加密会话…")
                 }
                 account.error?.let { KugouMessage(it, isError = true) }
             }
             if (!signedIn || showLogin) {
                 item("login_title") {
                     KugouSectionTitle(if (showLogin && signedIn) "授权另一个账号" else "选择登录方式")
-                    FlowRow(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        FilterChip(
-                            selected = !smsMode,
-                            onClick = { cancelAuthorization(); smsMode = false }, enabled = !state.busy,
-                            label = { Text("扫码授权") },
-                            leadingIcon = { Icon(Icons.Rounded.QrCode2, null, Modifier.size(18.dp)) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                        FilterChip(
-                            selected = smsMode,
-                            onClick = { cancelAuthorization(); smsMode = true }, enabled = !state.busy,
-                            label = { Text("短信验证码") },
-                            leadingIcon = { Icon(Icons.Rounded.Sms, null, Modifier.size(18.dp)) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        KugouSegmentedControl(listOf("扫码登录", "短信登录"), if (smsMode) 1 else 0, enabled = !state.busy) {
+                            cancelAuthorization()
+                            smsMode = it == 1
+                        }
                     }
                 }
                 item("login_form") {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    KugouCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (smsMode) {
                             Text(
                                 "验证码仅通过安全通道发送；接口不支持安全短信时，请改用扫码授权。",
@@ -192,7 +188,12 @@ fun KugouAccountScreen(
                                 supportingText = { Text("手机号仅保留在当前页面") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 enabled = !state.busy && state.accounts.isEmpty(), modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    unfocusedBorderColor = Color.Transparent,
+                                ),
                             )
                             OutlinedTextField(
                                 value = code, onValueChange = { code = it.filter { digit -> digit in '0'..'9' }.take(8) },
@@ -202,7 +203,12 @@ fun KugouAccountScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                                 visualTransformation = PasswordVisualTransformation(),
                                 enabled = !state.busy && state.accounts.isEmpty(), modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    unfocusedBorderColor = Color.Transparent,
+                                ),
                             )
                             // 发送只能由这一个按钮触发，切模式和取消不重置 ViewModel 的 60 秒限流。
                             OutlinedButton(
@@ -243,6 +249,7 @@ fun KugouAccountScreen(
                                 TextButton(onClick = { cancelAuthorization() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消扫码") }
                             }
                         }
+                      }
                     }
                 }
             }
@@ -258,9 +265,9 @@ fun KugouAccountScreen(
                 state.error?.let { KugouMessage(it, isError = true) }
             }
             item("vip") {
-                HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 KugouSectionTitle("每日 VIP 权益")
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                KugouCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                  Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (signedIn) {
                         Text(account.vipDescription.ifBlank { "会员信息暂未返回，请刷新账号资料。" }, style = MaterialTheme.typography.bodyLarge)
                     }
@@ -290,24 +297,21 @@ fun KugouAccountScreen(
                         "后台检查可能受省电、断网或强制停止影响；下次打开时补检查当日权益，不追补过期奖励。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                  }
                 }
             }
             item("account_actions") {
                 KugouSectionTitle("账号管理")
-                FlowRow(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(onClick = viewModel::refresh, enabled = !state.busy && !state.polling, modifier = Modifier.heightIn(min = 48.dp)) { Text("刷新账号资料") }
-                    if (signedIn) {
-                        TextButton(
-                            onClick = { cancelAuthorization(); showLogin = !showLogin }, enabled = !state.busy,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text(if (showLogin) "取消切换" else "切换账号") }
-                        TextButton(
-                            onClick = { confirmLogout = true }, enabled = !state.busy, modifier = Modifier.heightIn(min = 48.dp),
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) { Text("退出账号") }
+                KugouCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Column {
+                        KugouAccountAction(Icons.Rounded.Refresh, "刷新账号资料", !state.busy && !state.polling, onClick = viewModel::refresh)
+                        if (signedIn) {
+                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                            KugouAccountAction(Icons.Rounded.SwapHoriz, if (showLogin) "取消切换" else "切换账号", !state.busy,
+                                onClick = { cancelAuthorization(); showLogin = !showLogin })
+                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                            KugouAccountAction(Icons.AutoMirrored.Rounded.Logout, "退出账号", !state.busy, destructive = true, onClick = { confirmLogout = true })
+                        }
                     }
                 }
             }
@@ -347,6 +351,19 @@ fun KugouAccountScreen(
         },
         dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("取消") } },
     )
+}
+
+@Composable
+private fun KugouAccountAction(icon: ImageVector, label: String, enabled: Boolean, destructive: Boolean = false, onClick: () -> Unit) {
+    val color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Surface(onClick = onClick, enabled = enabled, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(icon, null, Modifier.size(20.dp), tint = color.copy(alpha = if (enabled) 1f else 0.4f))
+            Text(label, Modifier.weight(1f), fontSize = 14.sp, color = color.copy(alpha = if (enabled) 1f else 0.4f))
+            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable

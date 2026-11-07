@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -109,8 +112,10 @@ internal fun KugouScreenFrame(
     scrollBehavior: TopAppBarScrollBehavior,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize()) {
-        content()
+    KugouTheme {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.widthIn(max = 800.dp).fillMaxWidth()) { content() }
+        }
         TopAppBar(
             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = {
@@ -141,15 +146,17 @@ internal fun CancelOnKugouPageStop(onStop: () -> Unit) {
 }
 
 @Composable
-internal fun KugouSectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
+internal fun KugouSectionTitle(title: String, action: String? = null, subtitle: String? = null, onAction: () -> Unit = {}) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 24.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 22.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (action != null) {
             TextButton(onClick = onAction, modifier = Modifier.heightIn(min = 48.dp)) { Text(action) }
         }
@@ -217,6 +224,32 @@ internal fun KugouPageFooter(loading: Boolean, hasMore: Boolean, error: String?,
 }
 
 @Composable
+internal fun KugouCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Surface(modifier, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant), content = content)
+}
+
+@Composable
+internal fun KugouSegmentedControl(labels: List<String>, selectedIndex: Int, enabled: Boolean = true, onSelect: (Int) -> Unit) {
+    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            labels.forEachIndexed { index, label ->
+                Surface(
+                    onClick = { onSelect(index) }, enabled = enabled,
+                    modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp),
+                    color = if (index == selectedIndex) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainer,
+                    contentColor = if (index == selectedIndex) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                ) {
+                    Box(Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        Text(label, fontSize = 14.sp, fontWeight = if (index == selectedIndex) FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun KugouCover(url: Any?, modifier: Modifier = Modifier, cornerRadius: Dp = 8.dp) {
     Box(
         modifier.clip(RoundedCornerShape(cornerRadius)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -234,7 +267,7 @@ internal fun KugouCollectionTile(collection: KugouCollection, navController: Nav
             .padding(bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        KugouCover(collection.coverUrl, Modifier.fillMaxWidth().aspectRatio(1f), cornerRadius = 12.dp)
+        KugouCover(collection.coverUrl, Modifier.fillMaxWidth().aspectRatio(1f), cornerRadius = 18.dp)
         Text(
             collection.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.titleSmall,
@@ -276,12 +309,6 @@ internal fun KugouCollectionRow(collection: KugouCollection, type: String, navCo
             } else if (collection.description.isNotBlank()) {
                 Text(collection.description, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (preview) {
-                Text(
-                    if (collection.songs.isNotEmpty()) "歌曲摘要，打开查看完整榜单" else "打开查看完整榜单",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
         if (!preview) {
@@ -329,7 +356,7 @@ internal fun rememberKugouPlayback(navController: NavController): (List<MediaMet
 private class KugouPlaybackPreparation(var job: Job? = null)
 
 @Composable
-internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onPlay: () -> Unit, sourceLabel: String = "酷狗概念版", trackNumber: Int? = null) {
+internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onPlay: () -> Unit, sourceLabel: String? = null, trackNumber: Int? = null) {
     val database = LocalDatabase.current
     val player = LocalPlayerConnection.current
     val snackbar = LocalSnackbarHostState.current
@@ -373,8 +400,8 @@ internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onP
     }
 
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onPlay).heightIn(min = 80.dp)
-            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onPlay).heightIn(min = 68.dp)
+            .padding(start = 12.dp, end = 2.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (trackNumber != null) {
@@ -383,12 +410,12 @@ internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onP
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp),
             )
         }
-        KugouCover(song.getThumbnailModel(), Modifier.size(52.dp))
+        KugouCover(song.getThumbnailModel(), Modifier.size(48.dp), cornerRadius = 12.dp)
         Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f),
+                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
                 )
                 if (liked) {
                     Icon(Icons.Rounded.Favorite, "已保存在本地喜欢", tint = MaterialTheme.colorScheme.primary,
@@ -396,8 +423,8 @@ internal fun KugouSongRow(song: MediaMetadata, navController: NavController, onP
                 }
             }
             Text(song.artists.joinToString("、") { it.name }.ifBlank { "未知歌手" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(sourceLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            sourceLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         Box {
             IconButton(onClick = { expanded = true }, enabled = !saving, modifier = Modifier.size(48.dp)) {

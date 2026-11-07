@@ -57,11 +57,19 @@
 - **适用范围**：当前二次开发分支的 Android 构建。
 - 不主动打包 APK。如果打包，需要增加版本号，并同时输出 arm64-v8a 与 armeabi-v7a 两份 core 包，不打 universal、x86 或 full。应用内更新检查仍以已上传的 `arm64-v8a-release` APK 作为该版本已发布的依据。
 
+## main 校验与 APK 打包分流
+
+- **触发信号**：发布时同时推送 main 与版本 tag，重复运行正式包和完整 Debug 打包。
+- **根因/约束**：main 回归验证有价值，但不需要每次推送都重复编译原生库、生成并上传 Debug 安装包。
+- **正确做法**：main 的 push 仅执行 core Kotlin 编译与非 UI 单测，不安装专用于原生打包的 CMake / NDK、不运行 assemble 或 Debug Lint、不上传 APK；手动触发、PR 和 canary 保留原有 Debug 打包、单测与 Lint。判定必须同时核对事件与 ref，手动在 main 上运行仍能生成 Debug 包。正式发布仍由 v* tag 触发，不因纯 CI 修改递增 App 版本或重写已发布 tag。
+- **验证方式**：验证 main push、canary push、PR、main 手动触发的条件分流；main 任务图无 CMake / 原生编译和 APK 打包，Kotlin 与非 UI 单测通过；正式发布工作流保持不变。
+- **适用范围**：`.github/workflows/build.yml`、正式发布触发与项目 CI 维护。
+
 ## CI 原生工具链必须显式安装
 
 - **触发信号**：GitHub Actions 的 TagLib 原生任务报告 `CXX1300`，或 runner 镜像更新后找不到模块声明的 CMake / NDK。
 - **根因/约束**：TagLib 固定声明 CMake 3.31.6 和 NDK 29.0.13113456（r29-beta1）；runner 预装组件不保证覆盖这些版本，Kotlin 编译与非 UI 单测也不会完整验证 Release 原生打包。
-- **正确做法**：正式、预发布和 Debug 工作流都必须在 Gradle 构建前通过 sdkmanager 安装模块声明的具体版本，接受相应 SDK 许可证；固定 beta NDK 使用 beta 渠道，不随意替换模块版本或跳过原生构建。模块工具链变更时同步更新全部工作流。
+- **正确做法**：正式、预发布和 Debug 打包路径都必须在 Gradle 构建前通过 sdkmanager 安装模块声明的具体版本，接受相应 SDK 许可证；固定 beta NDK 使用 beta 渠道，不随意替换模块版本或跳过原生构建。main 仅编译与非 UI 单测的路径不属于 APK 打包路径。模块工具链变更时同步更新全部打包工作流。
 - **验证方式**：安装后输出 CMake 版本；本地 `:app:assembleCoreRelease` 完整通过，并检查两架构 APK、正式签名及版本号；远程确认工作流已启动，不持续轮询构建。
 - **适用范围**：`taglib/build.gradle.kts`、三个 Android 打包工作流和正式发布验证。
 

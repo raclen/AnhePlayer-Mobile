@@ -13,27 +13,36 @@ internal object KugouParser {
     fun song(item: JsonObject): MediaMetadata? {
         val audio = item.obj("audio_info")
         val deprecated = item.obj("deprecated")
-        val hash = item.text("hash", "FileHash", "filehash").ifBlank { audio.text("hash") }.ifBlank { deprecated.text("hash") }.lowercase()
-        if (!hash.matches(Regex("[a-f0-9]{32}"))) return null
+        val relatedGoods = item.rows("relate_goods")
+        val hash = sequenceOf(item.text("hash", "FileHash", "filehash"), item.text("hash_128"), audio.text("hash"), deprecated.text("hash"))
+            .plus(relatedGoods.asSequence().map { it.text("hash", "hash_128") })
+            .map { it.lowercase() }.firstOrNull { it.matches(Regex("[a-f0-9]{32}")) } ?: return null
+        // 电台把专辑、音频 ID 放在 relate_goods 中，必须与选中的 hash 配对，不能套用另一首版本的权限参数。
+        val related = relatedGoods.firstOrNull { it.text("hash", "hash_128").equals(hash, ignoreCase = true) } ?: JsonObject(emptyMap())
+        val relatedInfo = related.obj("info")
         val combinedName = clean(item.text("name", "filename", "FileName"))
         val singer = clean(item.text("singername", "SingerName", "author_name", "singer").ifBlank {
             item.rows("authors").joinToString("、") { it.text("author_name", "name") }
-        }.ifBlank { combinedName.substringBefore(" - ", "") })
+        }.ifBlank { item.rows("singerinfo").joinToString("、") { it.text("name", "author_name") } }
+            .ifBlank { combinedName.substringBefore(" - ", "") })
         val title = clean(item.text("ori_audio_name", "OriSongName", "SongName", "songname", "songname_original", "audio_name").ifBlank {
-            combinedName.substringAfter(" - ", combinedName)
+            related.text("songname", "ori_audio_name").ifBlank { combinedName.substringAfter(" - ", combinedName) }
         })
         if (title.isBlank()) return null
         val album = item.obj("album_info")
-        val albumId = item.text("album_id", "AlbumID").ifBlank { album.text("album_id") }
-        val albumName = clean(item.text("album_name", "AlbumName").ifBlank { item.obj("albuminfo").text("name") }.ifBlank { album.text("album_name") })
+        val albumId = item.text("album_id", "AlbumID").ifBlank { album.text("album_id") }.ifBlank { related.text("album_id") }
+        val albumName = clean(item.text("album_name", "AlbumName", "albumname").ifBlank { item.obj("albuminfo").text("name") }
+            .ifBlank { album.text("album_name") }.ifBlank { related.text("albumname", "album_name") })
         val trans = item.obj("trans_param")
-        val image = cover(item.text("Image", "image", "cover", "sizable_cover").ifBlank {
+        val image = cover(item.text("Image", "image", "cover", "sizable_cover", "imgurl").ifBlank {
             trans.text("union_cover", "sizable_cover", "album_sizable_cover")
-        })
-        val seconds = (item.number("Duration", "duration") ?: deprecated.number("duration"))?.toInt()
+        }.ifBlank { relatedInfo.text("image") })
+        val seconds = (item.number("Duration", "duration", "time_length") ?: deprecated.number("duration") ?: relatedInfo.number("duration"))?.toInt()
         val milliseconds = item.number("timelen", "timelength", "timeLength") ?: audio.number("timelength")
         val duration = seconds?.takeIf { it > 0 } ?: milliseconds?.takeIf { it > 0 }?.div(1000)?.toInt() ?: -1
-        val audioId = item.text("album_audio_id", "MixSongID", "audio_id", "mixsongid").ifBlank { item.obj("base").text("album_audio_id") }
+        val audioId = item.text("album_audio_id", "MixSongID", "mixsongid")
+            .ifBlank { item.obj("base").text("album_audio_id") }.ifBlank { related.text("album_audio_id") }
+            .ifBlank { item.text("audio_id", "songid") }
         val raw = buildJsonObject {
             put("version", 1)
             put("hash", hash)

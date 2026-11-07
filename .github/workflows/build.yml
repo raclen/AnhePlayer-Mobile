@@ -1,4 +1,5 @@
-name: Build debug APK
+name: Android CI
+run-name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Main 编译与单测' || 'Debug APK 构建与单测' }}
 on:
   workflow_dispatch:
   push:
@@ -12,6 +13,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 只排除 main 的自动 push；在 main 手动运行仍允许生成 Debug 包。
+      BUILD_DEBUG_APK: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,18 +37,26 @@ jobs:
 
       # TagLib 固定使用 r29-beta1；允许 beta 渠道，但只安装项目声明的具体版本。
       - name: Install pinned native build tools
+        if: env.BUILD_DEBUG_APK == 'true'
         run: |
           /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --channel=1 --install "cmake;3.31.6" "ndk;29.0.13113456"
           /usr/local/lib/android/sdk/cmake/3.31.6/bin/cmake --version
 
+      - name: Compile main and run jvm tests
+        if: env.BUILD_DEBUG_APK == 'false'
+        run: ./gradlew :app:compileCoreDebugKotlin :app:testCoreDebugUnitTest --no-daemon -Dkotlin.incremental=false --stacktrace -DskipFormatKtlint
+
       - name: Build debug APK and run jvm tests
+        if: env.BUILD_DEBUG_APK == 'true'
         run: ./gradlew assembleCoreDebug testCoreDebugUnitTest --stacktrace -DskipFormatKtlint
 
       - name: Run Android Lint
+        if: env.BUILD_DEBUG_APK == 'true'
         continue-on-error: true
         run: ./gradlew lintCoreDebug --stacktrace -DskipFormatKtlint
 
       - name: Upload APK
+        if: env.BUILD_DEBUG_APK == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app

@@ -497,11 +497,7 @@ object KugouConcept {
         for (attempt in 0..1) {
             val (expected, current) = accountMutex.withLock { version.value to session }
             check(current.loggedIn && mutableState.value.status == KugouAccountStatus.SIGNED_IN) { "请前往设置登录酷狗账号" }
-            val query = mapOf("album_id" to info.text("album_id").ifBlank { "0" }, "area_code" to "1", "hash" to hash,
-                "ssa_flag" to "is_fromtrack", "version" to "11430", "page_id" to "967177915", "quality" to "128",
-                "album_audio_id" to info.text("album_audio_id").ifBlank { "0" }, "behavior" to "play", "pid" to "411", "cmd" to "26",
-                "pidversion" to "3001", "IsFreePart" to "1", "ppage_id" to "356753938,823673182,967485191", "cdnBackup" to "1", "module" to "", "clientver" to "11430",
-                "key" to KugouCrypto.streamKey(hash, current.mid, current.userId))
+            val query = KugouPlaybackProtocol.query(info, current)
             val response = api.request("/v5/url", query = query, router = "trackercdn.kugou.com", checkBusiness = false, sessionOverride = current)
             checkVersion(expected)
             try { api.ensureSuccess(response) } catch (e: KugouApiException) {
@@ -512,13 +508,8 @@ object KugouConcept {
                 if (e.authenticationExpired) accountMutex.withLock { checkVersion(expected); markExpired() }
                 throw e
             }
-            fun urls(element: JsonElement?): List<String> = when (element) {
-                is JsonPrimitive -> listOf(element.content)
-                is JsonArray -> element.flatMap(::urls)
-                else -> emptyList()
-            }
-            val candidates = (urls(response["url"]) + urls(response["backupUrl"]) + urls(response["backup_url"])).filter { it.startsWith("https://") }.distinct()
-            if (candidates.isEmpty()) throw IOException(if (response.number("status") == 3L) "这首歌暂无可用播放权限" else "酷狗未返回可用播放地址，请检查账号或歌曲权限")
+            val candidates = KugouPlaybackProtocol.urls(response)
+            if (candidates.isEmpty()) throw KugouPlaybackProtocol.unavailable(response)
             val expiry = response.number("expire", "expires", "expire_time")
             val remoteExpiry = when {
                 expiry == null -> api.serverNow + TimeUnit.MINUTES.toMillis(5)
