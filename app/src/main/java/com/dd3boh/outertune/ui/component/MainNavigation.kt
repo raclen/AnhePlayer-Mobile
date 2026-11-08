@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MusicNote
@@ -23,15 +24,19 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.constants.ShowKugouKey
 import com.dd3boh.outertune.constants.TopBarInsets
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.screens.Screens
+import com.dd3boh.outertune.utils.rememberPreference
 
 private data class DrawerDestination(
     val route: String,
@@ -42,7 +47,7 @@ private data class DrawerDestination(
 private val drawerDestinations = listOf(
     DrawerDestination(Screens.Songs.route, "歌曲", Icons.Rounded.MusicNote),
     DrawerDestination(Screens.Playlists.route, "歌单", Icons.AutoMirrored.Rounded.QueueMusic),
-    DrawerDestination(Screens.Kugou.route, "酷狗专区", Icons.Rounded.MusicNote),
+    DrawerDestination(Screens.Kugou.route, "酷狗专区", Icons.Rounded.Headphones),
     DrawerDestination(Screens.Radio.route, "电台", Icons.Rounded.Radio),
     DrawerDestination(Screens.Settings.route, "设置", Icons.Rounded.Settings),
     DrawerDestination("settings/about", "关于", Icons.Rounded.Info),
@@ -54,6 +59,10 @@ fun MainNavigationDrawer(
     onNavigate: (String) -> Unit,
     hasUnreadUpdate: Boolean = false,
 ) {
+    val (showKugou) = rememberPreference(ShowKugouKey, defaultValue = true)
+    val destinations = remember(showKugou) {
+        if (showKugou) drawerDestinations else drawerDestinations.filter { it.route != Screens.Kugou.route }
+    }
     ModalDrawerSheet {
         Spacer(Modifier.height(40.dp))
         Text(
@@ -61,7 +70,7 @@ fun MainNavigationDrawer(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
         )
-        drawerDestinations.forEach { destination ->
+        destinations.forEach { destination ->
             NavigationDrawerItem(
                 label = { Text(destination.title) },
                 selected = currentRoute == destination.route ||

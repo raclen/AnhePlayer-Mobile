@@ -73,9 +73,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.dd3boh.outertune.constants.ShowKugouKey
 import com.dd3boh.outertune.source.kugou.KugouAccountStatus
 import com.dd3boh.outertune.source.kugou.KugouClaimStatus
 import com.dd3boh.outertune.source.kugou.KugouConcept
+import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.KugouAccountViewModel
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -312,6 +314,29 @@ fun KugouAccountScreen(
                             HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                             KugouAccountAction(Icons.AutoMirrored.Rounded.Logout, "退出账号", !state.busy, destructive = true, onClick = { confirmLogout = true })
                         }
+                    }
+                }
+            }
+            item("zone_display") {
+                KugouSectionTitle("专区设置")
+                KugouCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    val (showKugou, onShowKugouChange) = rememberPreference(ShowKugouKey, defaultValue = true)
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("显示酷狗专区", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                if (showKugou) "在侧边栏菜单中显示酷狗专区，关闭后在菜单隐藏" else "已在侧边栏菜单中隐藏，开启后在菜单显示",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showKugou,
+                            onCheckedChange = onShowKugouChange,
+                        )
                     }
                 }
             }

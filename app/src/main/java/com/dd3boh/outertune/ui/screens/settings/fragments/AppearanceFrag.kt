@@ -10,19 +10,30 @@ package com.dd3boh.outertune.ui.screens.settings.fragments
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.constants.ShowKugouKey
 import com.dd3boh.outertune.constants.SlimNavBarKey
 import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.utils.rememberPreference
 
 @Composable
 fun ColumnScope.AppearanceMiscFrag() {
+    val (showKugou, onShowKugouChange) = rememberPreference(ShowKugouKey, defaultValue = true)
     val (slimNav, onSlimNavChange) = rememberPreference(SlimNavBarKey, defaultValue = false)
+
+    SwitchPreference(
+        title = { Text("显示酷狗专区") },
+        description = if (showKugou) "在侧边栏菜单中显示酷狗专区（关闭后在菜单隐藏）" else "已在侧边栏菜单中隐藏（开启后在菜单显示）",
+        icon = { Icon(Icons.Rounded.Headphones, null) },
+        checked = showKugou,
+        onCheckedChange = onShowKugouChange
+    )
 
     SwitchPreference(
         title = { Text(stringResource(R.string.slim_navbar_title)) },

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Palette
@@ -38,10 +39,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dd3boh.outertune.BuildConfig
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.constants.ShowKugouKey
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
+import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.utils.AppLogManager
+import com.dd3boh.outertune.utils.rememberPreference
 
 /**
  * 设置首页
@@ -77,6 +81,14 @@ fun SettingsScreen(
                 description = "概念版登录、每日自动领取 VIP",
                 icon = { Icon(Icons.Rounded.MusicNote, null) },
                 onClick = { navController.navigate("settings/kugou") },
+            )
+            val (showKugou, onShowKugouChange) = rememberPreference(ShowKugouKey, defaultValue = true)
+            SwitchPreference(
+                title = { Text("显示酷狗专区") },
+                description = if (showKugou) "在侧边栏菜单中显示酷狗专区（关闭后在菜单隐藏）" else "已在侧边栏菜单中隐藏（开启后在菜单显示）",
+                icon = { Icon(Icons.Rounded.Headphones, null) },
+                checked = showKugou,
+                onCheckedChange = onShowKugouChange,
             )
             PreferenceEntry(
                 title = { Text("电台设置") },

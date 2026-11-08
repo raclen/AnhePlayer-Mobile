@@ -23,6 +23,7 @@ val EnabledTabsKey = stringPreferencesKey("enabledTabs")
 val EnabledFiltersKey = stringPreferencesKey("enabledFilters")
 val DefaultOpenTabKey = stringPreferencesKey("defaultOpenTab")
 val SlimNavBarKey = booleanPreferencesKey("slimNavBar")
+val ShowKugouKey = booleanPreferencesKey("showKugou")
 
 /**
  * Content
