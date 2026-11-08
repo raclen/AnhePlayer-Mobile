@@ -50,8 +50,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,8 +99,12 @@ fun KugouHomeScreen(
     val queuePlaylistId = player?.queuePlaylistId?.collectAsState()?.value
     val currentQueue = queueBoard?.getCurrentQueue()
     val activeMode = KugouRadioMode.fromQueue(currentQueue?.playlistId ?: queuePlaylistId, currentQueue?.title, currentSong?.source)
-    val radioActive = activeMode == state.radioMode
+    // 队列可能刚从数据库恢复到 QueueBoard，播放器却还没装载任何媒体项，此时不能视为电台已就绪。
+    val playerLoaded = player?.queueWindows?.collectAsState()?.value?.isNotEmpty() == true
+    val radioActive = activeMode == state.radioMode && playerLoaded
     val radioSong = if (radioActive) currentSong else data.radioSongs.firstOrNull()
+    // 首屏加载期间点击播放时记下意图，加载完成后再真正起播。
+    var pendingRadioPlay by remember { mutableStateOf(false) }
 
     fun playSection(songs: List<MediaMetadata>, title: String, playlistId: String? = null) {
         if (songs.isNotEmpty()) playback(songs, 0, title, playlistId)
@@ -115,14 +121,27 @@ fun KugouHomeScreen(
         playback.cancel()
         val queue = player?.queueBoard?.value?.getCurrentQueue()
         val mode = KugouRadioMode.fromQueue(queue?.playlistId, queue?.title, player?.mediaMetadata?.value?.source)
+        // 队列仅存在于 QueueBoard 时播放器仍是空的，必须先装载队列，否则 play() 无声且无反馈。
+        val loaded = player?.player?.mediaItemCount?.let { it > 0 } == true
         if (player != null && mode == state.radioMode && account.status == KugouAccountStatus.SIGNED_IN) {
+            if (!loaded) player.queueBoard.value.setCurrQueue(queue, true)
             if (player.player.playWhenReady && player.player.playbackState != STATE_ENDED) player.player.pause()
             else {
                 if (player.player.playbackState == STATE_ENDED) player.player.seekToDefaultPosition(0)
                 if (player.player.playbackState == STATE_IDLE) player.player.prepare()
                 player.player.play()
             }
+        } else if (data.radioSongs.isEmpty() && (state.loading || state.radioLoading)) {
+            // 首屏推荐仍在请求中：记下播放意图，加载完成后自动开始，避免点击被静默吞掉。
+            pendingRadioPlay = true
         } else playSection(data.radioSongs, state.radioMode.title, state.radioMode.playlistId)
+    }
+
+    LaunchedEffect(pendingRadioPlay, state.loading, state.radioLoading, data.radioSongs.size) {
+        if (pendingRadioPlay && !state.loading && !state.radioLoading) {
+            pendingRadioPlay = false
+            if (data.radioSongs.isNotEmpty()) playback(data.radioSongs, 0, state.radioMode.title, state.radioMode.playlistId)
+        }
     }
 
     fun radioLoadedCallback(): (List<MediaMetadata>, KugouRadioMode) -> Unit {
@@ -313,13 +332,14 @@ private fun KugouRadioHero(
             }
             if (narrow) {
                 KugouRadioText(song, mode, status, isPlaying)
-                KugouRadioArtwork(song, mode, isPlaying, !loading, loading, onPlay,
+                KugouRadioArtwork(song, mode, isPlaying, true, loading, onPlay,
                     Modifier.align(Alignment.End).padding(top = 12.dp))
             } else {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f)) { KugouRadioText(song, mode, status, isPlaying) }
-                    KugouRadioArtwork(song, mode, isPlaying, !loading, loading, onPlay)
+                    // 加载中也允许点击，由 onPlay 给出明确反馈，避免首屏按钮静默无响应。
+                    KugouRadioArtwork(song, mode, isPlaying, true, loading, onPlay)
                 }
             }
         }
