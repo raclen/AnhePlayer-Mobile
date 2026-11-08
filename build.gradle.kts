@@ -7,7 +7,6 @@ plugins {
 buildscript {
     repositories {
         google()
-        maven { setUrl("https://maven.aliyun.com/repository/public") }
         mavenCentral()
         maven { setUrl("https://jitpack.io") }
     }
