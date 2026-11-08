@@ -59,6 +59,7 @@ import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.PlaylistListItem
 import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
+import com.dd3boh.outertune.ui.dialog.ImportPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.DefaultDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
@@ -136,6 +137,9 @@ fun PlaylistMenu(
         mutableStateOf(false)
     }
     var showChoosePlaylistDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var showImportPlaylistDialog by rememberSaveable {
         mutableStateOf(false)
     }
 
@@ -252,6 +256,13 @@ fun PlaylistMenu(
                 title = R.string.edit
             ) {
                 showEditDialog = true
+            }
+
+            GridMenuItem(
+                icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                title = R.string.import_online_playlist,
+            ) {
+                showImportPlaylistDialog = true
             }
         }
         GridMenuItem(
@@ -400,6 +411,16 @@ fun PlaylistMenu(
             songIds = songs.map { it.id },
             onPreAdd = { songs.map { it.id } },
             onDismiss = { showChoosePlaylistDialog = false }
+        )
+    }
+
+    if (showImportPlaylistDialog) {
+        ImportPlaylistDialog(
+            initialTargetPlaylist = playlist,
+            onDismiss = {
+                showImportPlaylistDialog = false
+                onDismiss()
+            }
         )
     }
 }

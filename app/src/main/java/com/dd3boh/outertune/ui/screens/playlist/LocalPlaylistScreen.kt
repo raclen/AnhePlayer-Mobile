@@ -121,6 +121,7 @@ import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.PlaylistThumbnail
 import com.dd3boh.outertune.ui.component.items.SongListItem
 import com.dd3boh.outertune.ui.dialog.DefaultDialog
+import com.dd3boh.outertune.ui.dialog.ImportPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
 import com.dd3boh.outertune.ui.utils.backToMain
 import com.dd3boh.outertune.ui.utils.getNSongsString
@@ -232,6 +233,9 @@ fun LocalPlaylistScreen(
     var showEditDialog by remember {
         mutableStateOf(false)
     }
+    var showImportDialog by remember {
+        mutableStateOf(false)
+    }
 
     if (showEditDialog) {
         playlistWithSongs.first?.playlist?.let { playlistEntity ->
@@ -246,6 +250,15 @@ fun LocalPlaylistScreen(
                     }
 
                 }
+            )
+        }
+    }
+
+    if (showImportDialog) {
+        playlistWithSongs.first?.let { playlist ->
+            ImportPlaylistDialog(
+                initialTargetPlaylist = playlist,
+                onDismiss = { showImportDialog = false }
             )
         }
     }
@@ -398,6 +411,7 @@ fun LocalPlaylistScreen(
                                 playlist = playlist,
                                 songs =  playlistWithSongs.second,
                                 onShowEditDialog = { showEditDialog = true },
+                                onShowImportDialog = { showImportDialog = true },
                                 onShowRemoveDownloadDialog = { showRemoveDownloadDialog = true },
                                 snackbarHostState = snackbarHostState,
                                 modifier = Modifier // .animateItem()
@@ -605,6 +619,7 @@ fun LocalPlaylistHeader(
     playlist: Playlist,
     songs: List<PlaylistSong>,
     onShowEditDialog: () -> Unit,
+    onShowImportDialog: (() -> Unit)? = null,
     onShowRemoveDownloadDialog: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier,
@@ -690,8 +705,19 @@ fun LocalPlaylistHeader(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
-                            contentDescription = null
+                            contentDescription = stringResource(R.string.edit)
                         )
+                    }
+
+                    if (playlist.playlist.isEditable && onShowImportDialog != null) {
+                        IconButton(
+                            onClick = onShowImportDialog
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                                contentDescription = stringResource(R.string.import_online_playlist)
+                            )
+                        }
                     }
 
                     if (songs.any { !it.song.song.isLocal }) {

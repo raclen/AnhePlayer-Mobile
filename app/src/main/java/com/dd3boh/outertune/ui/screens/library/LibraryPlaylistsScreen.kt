@@ -83,6 +83,7 @@ import com.dd3boh.outertune.ui.component.items.AutoPlaylistGridItem
 import com.dd3boh.outertune.ui.component.items.AutoPlaylistListItem
 import com.dd3boh.outertune.ui.dialog.CreatePlaylistDialog
 import com.dd3boh.outertune.ui.dialog.ImportM3uDialog
+import com.dd3boh.outertune.ui.dialog.ImportPlaylistDialog
 import com.dd3boh.outertune.ui.menu.ActionDropdown
 import com.dd3boh.outertune.ui.menu.DropdownItem
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
@@ -123,6 +124,7 @@ fun LibraryPlaylistsScreen(
     val lazyGridState = rememberLazyGridState()
 
     var showImportM3uDialog by rememberSaveable { mutableStateOf(false) }
+    var showImportPlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showCreatePlaylistDialog) {
@@ -230,7 +232,12 @@ fun LibraryPlaylistsScreen(
                             action = { showCreatePlaylistDialog = true }
                         ),
                         DropdownItem(
-                            title = stringResource(R.string.import_playlist),
+                            title = stringResource(R.string.import_online_playlist),
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null) },
+                            action = { showImportPlaylistDialog = true }
+                        ),
+                        DropdownItem(
+                            title = stringResource(R.string.m3u_import_playlist),
                             leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Input, null) },
                             action = { showImportM3uDialog = true }
                         ),
@@ -421,6 +428,15 @@ fun LibraryPlaylistsScreen(
         /**
          * Dialog
          */
+
+        if (showImportPlaylistDialog) {
+            ImportPlaylistDialog(
+                onDismiss = { showImportPlaylistDialog = false },
+                onPlaylistImported = { playlistId ->
+                    navController.navigate("local_playlist/$playlistId")
+                }
+            )
+        }
 
         if (showImportM3uDialog) {
             ImportM3uDialog(
