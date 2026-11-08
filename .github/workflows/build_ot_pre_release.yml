@@ -26,6 +26,18 @@ jobs:
           distribution: "temurin"
           cache: 'gradle'
 
+      - name: Ensure Gradle wrapper distribution
+        run: |
+          WRAPPER_DIR="$HOME/.gradle/wrapper/dists/gradle-9.2.0-bin/11i5gvueggl8a5cioxuftxrik"
+          mkdir -p "$WRAPPER_DIR"
+          if [ ! -f "$WRAPPER_DIR/gradle-9.2.0-bin.zip.ok" ] && [ ! -f "$WRAPPER_DIR/gradle-9.2.0-bin.zip" ]; then
+            echo "Pre-fetching Gradle 9.2.0 distribution..."
+            (curl -fL --connect-timeout 10 --max-time 60 -o "$WRAPPER_DIR/gradle-9.2.0-bin.zip.tmp" "https://repo.huaweicloud.com/gradle/gradle-9.2.0-bin.zip" || \
+             curl -fL --connect-timeout 10 --max-time 60 -o "$WRAPPER_DIR/gradle-9.2.0-bin.zip.tmp" "https://mirrors.cloud.tencent.com/gradle/gradle-9.2.0-bin.zip" || \
+             curl -fL --connect-timeout 10 --max-time 120 -o "$WRAPPER_DIR/gradle-9.2.0-bin.zip.tmp" "https://services.gradle.org/distributions/gradle-9.2.0-bin.zip") && \
+            mv "$WRAPPER_DIR/gradle-9.2.0-bin.zip.tmp" "$WRAPPER_DIR/gradle-9.2.0-bin.zip"
+          fi
+
       - name: Accept SDK licenses
         run: yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --channel=1 --licenses
 
