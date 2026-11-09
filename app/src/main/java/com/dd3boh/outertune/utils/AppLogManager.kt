@@ -26,11 +26,30 @@ object AppLogManager {
     private const val TAG = "AppLogManager"
     private const val CRASH_FILE_NAME = "crash_log.txt"
     private const val RUNTIME_LOG_FILE = "app_runtime.log"
-    private const val MAX_RUNTIME_LOG_LINES = 1000
-    private const val MAX_RUNTIME_FILE_SIZE = 1024 * 512 // 512 KB
+    // 只保留最近 20 条，避免复制日志过长造成卡顿；堆栈行跟随所属条目一起裁剪。
+    private const val MAX_RUNTIME_LOG_ENTRIES = 20
+    private const val MAX_RUNTIME_FILE_SIZE = 1024 * 32 // 32 KB，超过即裁剪为最近若干条
+    // 日志条目以 [HH:mm:ss.SSS][级别][标签] 开头，用于把多行内容切回条目。
+    private val LOG_ENTRY_PREFIX = Regex("^\\[\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\]\\[")
 
     private var appContext: Context? = null
     private val memoryLogs = ConcurrentLinkedQueue<String>()
+
+    /** 将日志文本按条目（[时间][级别][标签] 开头）切分，多行堆栈跟随所属条目。 */
+    private fun splitEntries(text: String): List<String> = buildList {
+        text.lineSequence().forEach { line ->
+            if (LOG_ENTRY_PREFIX.containsMatchIn(line)) add(line)
+            else if (isEmpty()) add(line) // 文件头或残缺行，保留为第一条前缀
+            else this[lastIndex] = this[lastIndex] + "\n" + line
+        }
+    }
+
+    /** 只保留最近 [MAX_RUNTIME_LOG_ENTRIES] 条日志条目。 */
+    private fun trimToRecentEntries(text: String): String {
+        val entries = splitEntries(text)
+        if (entries.size <= MAX_RUNTIME_LOG_ENTRIES) return text
+        return entries.takeLast(MAX_RUNTIME_LOG_ENTRIES).joinToString("\n")
+    }
 
     fun install(context: Context) {
         val app = context.applicationContext
@@ -103,7 +122,7 @@ object AppLogManager {
 
         // 写入环形内存队列
         memoryLogs.add(logLine)
-        while (memoryLogs.size > MAX_RUNTIME_LOG_LINES) {
+        while (memoryLogs.size > MAX_RUNTIME_LOG_ENTRIES) {
             memoryLogs.poll()
         }
 
@@ -113,8 +132,8 @@ object AppLogManager {
                 val file = getRuntimeLogFile(ctx)
                 if (file.exists() && file.length() > MAX_RUNTIME_FILE_SIZE) {
                     val text = file.readText(Charsets.UTF_8)
-                    val half = text.length / 2
-                    file.writeText(text.substring(half), Charsets.UTF_8)
+                    // 超出大小限制时按条目裁剪为最近若干条，避免复制或读取过长卡顿。
+                    file.writeText(trimToRecentEntries(text), Charsets.UTF_8)
                 }
                 file.appendText(logLine + "\n", Charsets.UTF_8)
             } catch (e: Exception) {
@@ -179,7 +198,8 @@ object AppLogManager {
             val file = getRuntimeLogFile(ctx)
             if (file.exists() && file.length() > 0) {
                 try {
-                    return file.readText(Charsets.UTF_8)
+                    // 读取时同样按最近 20 条裁剪，兼容旧版本遗留的超长日志文件。
+                    return trimToRecentEntries(file.readText(Charsets.UTF_8))
                 } catch (e: Exception) {
                     // fall back to memory
                 }

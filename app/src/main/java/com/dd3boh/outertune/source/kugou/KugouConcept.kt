@@ -6,6 +6,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.utils.AppLogManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 object KugouConcept {
+    private const val TAG = "KugouConcept"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val accountMutex = Mutex()
     private val deviceMutex = Mutex()
@@ -67,6 +69,7 @@ object KugouConcept {
                 }
                 restored.complete(Unit)
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                AppLogManager.e(TAG, "酷狗账号恢复失败，请重新登录", e)
                 mutableState.update { it.copy(status = KugouAccountStatus.SIGNED_OUT, error = "酷狗账号恢复失败，请重新登录") }
                 restored.completeExceptionally(IOException("酷狗账号恢复失败"))
                 return@launch
@@ -141,6 +144,7 @@ object KugouConcept {
         val key = body.obj("data").text("qrcode")
         check(key.isNotBlank()) { "酷狗未返回登录二维码" }
         qrVersions[key] = expected
+        AppLogManager.i(TAG, "已生成酷狗登录二维码，等待扫码")
         // 二维码仅由本地绘制，授权 key 不交给图片生成网站。
         return KugouQrLogin(key, "https://h5.kugou.com/apps/loginQRCode/html/index.html?appid=3116&qrcode=" + java.net.URLEncoder.encode(key, "UTF-8"))
     }
@@ -161,6 +165,8 @@ object KugouConcept {
     suspend fun requestSms(mobile: String) {
         require(mobile.matches(Regex("1\\d{10}"))) { "请输入正确的手机号" }
         ensureDevice()
+        // 日志不记录手机号明文。
+        AppLogManager.i(TAG, "已请求发送酷狗短信验证码")
         api.request("/v7/send_mobile_code", router = "login.user.kugou.com", post = true, includeAccount = false,
             body = buildJsonObject { put("businessid", 5); put("mobile", mobile); put("plat", 3) })
     }
@@ -198,6 +204,8 @@ object KugouConcept {
             save(session.copy(userId = userId, token = token, t1 = data.text("t1"), nickname = data.text("nickname", "nick_name"), vipType = data.text("vip_type"), vipToken = data.text("vip_token"), renewedAt = api.serverNow))
             mutableState.update { it.copy(claimStatus = KugouClaimStatus.IDLE, claimMessage = "", vipDescription = "") }
         }
+        // 日志只记脱敏账号状态，不记录 userId、token 等凭据内容。
+        AppLogManager.i(TAG, "酷狗登录成功（${if (session.loggedIn) "已登录" else "登录态异常"}）")
         onForeground()
         scope.launch { optional { refreshAccount() } }
     }
@@ -227,6 +235,7 @@ object KugouConcept {
                     vipType = data.text("vip_type").ifBlank { current.vipType }, vipToken = data.text("vip_token").ifBlank { current.vipToken }, renewedAt = api.serverNow))
             }
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            AppLogManager.e(TAG, "酷狗账号续期失败：${e.message ?: "未知原因"}", e)
             accountMutex.withLock {
                 checkVersion(expected)
                 if (e is KugouApiException && e.authenticationExpired) markExpired()
@@ -236,6 +245,7 @@ object KugouConcept {
         }
     }
     private fun markExpired() {
+        AppLogManager.w(TAG, "酷狗登录已失效，标记账号过期并取消自动领取")
         mutableState.update { it.copy(status = KugouAccountStatus.EXPIRED, claimStatus = KugouClaimStatus.NEED_LOGIN, error = "酷狗登录已失效，请重新登录") }
         KugouVipClaimWorker.cancel(context)
     }
@@ -289,6 +299,7 @@ object KugouConcept {
             qrVersions.clear()
             KugouVipClaimWorker.cancel(context)
         }
+        AppLogManager.i(TAG, "酷狗账号已退出登录")
     }
     suspend fun setAutoClaimVip(enabled: Boolean) {
         requireInitialized()
@@ -361,6 +372,7 @@ object KugouConcept {
                 check(preferences.edit().putBoolean(key, true).remove("pending_$key").commit()) { "领取状态保存失败，请稍后复核" }
                 mutableState.update { it.copy(claimStatus = status, claimMessage = if (already) "服务端已确认今日领取" else "今日 VIP 领取成功", lastClaimCheck = api.serverNow) }
             }
+            AppLogManager.i(TAG, if (already) "酷狗 VIP 领取复核完成（服务端已确认）" else "酷狗今日 VIP 领取成功")
             optional { refreshAccount() }
             status
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
@@ -377,6 +389,7 @@ object KugouConcept {
                     else -> KugouClaimStatus.ERROR
                 }
                 if (e is KugouApiException && status != KugouClaimStatus.ALREADY_CLAIMED) preferences.edit().remove("pending_$key").commit()
+                AppLogManager.e(TAG, "酷狗 VIP 领取未完成（${status.name}）：${e.message ?: "未知原因"}", e)
                 mutableState.update { it.copy(claimStatus = status, claimMessage = when (status) {
                     KugouClaimStatus.ALREADY_CLAIMED -> "今日已领取 VIP"
                     KugouClaimStatus.NEED_OFFICIAL_APP -> "账号需要验证，请前往官方酷狗 APP 处理"
@@ -503,14 +516,19 @@ object KugouConcept {
             checkVersion(expected)
             try { api.ensureSuccess(response) } catch (e: KugouApiException) {
                 if (e.authenticationExpired && attempt == 0) {
+                    AppLogManager.w(TAG, "酷狗播放地址解析遇登录失效，尝试强制续期后重试")
                     renewSessionIfNeeded(force = true, expectedVersion = expected)
                     continue
                 }
                 if (e.authenticationExpired) accountMutex.withLock { checkVersion(expected); markExpired() }
+                AppLogManager.e(TAG, "酷狗播放地址解析失败：${e.message}", e)
                 throw e
             }
             val candidates = KugouPlaybackProtocol.urls(response)
-            if (candidates.isEmpty()) throw KugouPlaybackProtocol.unavailable(response)
+            if (candidates.isEmpty()) {
+                AppLogManager.w(TAG, "酷狗未返回可播放的音频地址（${KugouPlaybackProtocol.unavailable(response).message}）")
+                throw KugouPlaybackProtocol.unavailable(response)
+            }
             val expiry = response.number("expire", "expires", "expire_time")
             val remoteExpiry = when {
                 expiry == null -> api.serverNow + TimeUnit.MINUTES.toMillis(5)
@@ -521,6 +539,8 @@ object KugouConcept {
             val expiresAt = System.currentTimeMillis() + (remoteExpiry - api.serverNow).coerceAtLeast(0)
             val preview = response.number("is_free_part", "is_trial")
             val access = when (preview) { 1L -> KugouPlaybackAccess.PREVIEW; 0L -> KugouPlaybackAccess.FULL; else -> KugouPlaybackAccess.UNKNOWN }
+            // 只记地址数量与试听状态，不记录 CDN 地址本身。
+            AppLogManager.i(TAG, "酷狗播放地址解析成功：候选 ${candidates.size} 条，权限 ${access.name}，有效期 ${TimeUnit.MILLISECONDS.toMinutes(expiresAt - System.currentTimeMillis())} 分钟")
             return KugouResolvedStream(candidates, expiresAt, access, sessionVersion = expected)
         }
         throw IOException("酷狗账号续期后仍无法播放，请重新登录")

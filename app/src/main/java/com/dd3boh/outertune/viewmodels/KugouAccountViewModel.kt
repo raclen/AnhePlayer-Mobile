@@ -7,6 +7,7 @@ import com.dd3boh.outertune.source.kugou.KugouAccountSelectionException
 import com.dd3boh.outertune.source.kugou.KugouConcept
 import com.dd3boh.outertune.source.kugou.KugouLoginAccount
 import com.dd3boh.outertune.source.kugou.KugouQrLogin
+import com.dd3boh.outertune.utils.AppLogManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,6 +23,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class KugouAccountViewModel @Inject constructor() : ViewModel() {
+    private val TAG = "KugouAccountVM"
     val accountState = KugouConcept.accountState
     private val mutableState = MutableStateFlow(KugouLoginUiState())
     val state = mutableState.asStateFlow()
@@ -83,6 +85,7 @@ class KugouAccountViewModel @Inject constructor() : ViewModel() {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                AppLogManager.w(TAG, "酷狗扫码登录失败：${error.message ?: "未知原因"}")
                 if (request == generation) mutableState.update {
                     it.copy(qr = null, busy = false, polling = false, error = error.message ?: "扫码失败，请重试")
                 }
@@ -151,6 +154,7 @@ class KugouAccountViewModel @Inject constructor() : ViewModel() {
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                AppLogManager.w(TAG, "酷狗账号操作失败：${error.message ?: "未知原因"}")
                 if (request == generation) mutableState.update { it.copy(message = "", error = error.message ?: "操作失败，请重试") }
             } finally {
                 if (request == generation) mutableState.update { it.copy(busy = false) }

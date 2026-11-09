@@ -124,7 +124,11 @@ class LyricsHelper @Inject constructor(
         // 概念版和洛雪各自解析，不把账号歌曲参数传给脚本。
         if (mediaMetadata.source != null) {
             runCatching { SourceResolver.resolveLyric(mediaMetadata) }
-                .onFailure { if (it is CancellationException) throw it }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    // 歌词失败会回退到其他歌词源，仅记 debug 级便于排查，不挤占错误日志额度。
+                    com.dd3boh.outertune.utils.AppLogManager.d("LyricsHelper", "在线歌词解析失败，回退其他歌词源：${it.message ?: "未知原因"}")
+                }
                 .getOrNull()
                 ?.let { return it }
         }

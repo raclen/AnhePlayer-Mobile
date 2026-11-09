@@ -1,6 +1,7 @@
 /* Copyright (c) 2023 MakcRe, MIT. 协议适配通知见 assets/licenses/kugou-api-MIT.txt。 */
 package com.dd3boh.outertune.source.kugou
 
+import com.dd3boh.outertune.utils.AppLogManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
@@ -44,6 +45,7 @@ internal class KugouApiException(
 ) : IOException(message)
 
 internal class KugouApi(private val session: () -> KugouSession) {
+    private val TAG = "KugouApi"
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS).followRedirects(false).build()
     // 短信与领取等写请求不能在未知结果后由网络库自动重发。
@@ -69,7 +71,10 @@ internal class KugouApi(private val session: () -> KugouSession) {
     ): JsonObject {
         val bytes = raw(path, query, body?.toString().orEmpty(), post, host, router, web, includeAccount, defaults, extraHeaders, sessionOverride)
         val parsed = try { kugouJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)) as? JsonObject }
-        catch (_: Exception) { null } ?: throw IOException("酷狗接口返回了无法识别的内容")
+        catch (_: Exception) { null } ?: run {
+            AppLogManager.w(TAG, "酷狗接口返回了无法识别的内容，path=$path")
+            throw IOException("酷狗接口返回了无法识别的内容")
+        }
         if (checkBusiness) ensureSuccess(parsed)
         return parsed
     }
@@ -123,8 +128,14 @@ internal class KugouApi(private val session: () -> KugouSession) {
                         if (!continuation.isActive) return
                         try {
                             updateServerTime(response.header("Date"))
-                            if (response.header("ssa-code") != null) throw KugouApiException(20028, "账号需要安全验证，请前往官方酷狗 APP 完成")
-                            if (!response.isSuccessful) throw IOException("酷狗请求失败（HTTP ${response.code}）")
+                            if (response.header("ssa-code") != null) {
+                                AppLogManager.w(TAG, "酷狗返回 ssa-code 安全验证标记（HTTP ${response.code}）")
+                                throw KugouApiException(20028, "账号需要安全验证，请前往官方酷狗 APP 完成")
+                            }
+                            if (!response.isSuccessful) {
+                                AppLogManager.w(TAG, "酷狗请求失败：HTTP ${response.code}，path=${path}")
+                                throw IOException("酷狗请求失败（HTTP ${response.code}）")
+                            }
                             val bytes = response.body?.let { body ->
                                 try { body.bytes() } catch (e: IOException) { throw connectionFailure(e) }
                             } ?: throw IOException("酷狗接口没有返回内容")
@@ -147,6 +158,7 @@ internal class KugouApi(private val session: () -> KugouSession) {
             is ConnectException -> "无法连接酷狗服务，请检查网络或稍后重试"
             else -> "酷狗连接中断，请检查网络或稍后重试"
         }
+        AppLogManager.w(TAG, "酷狗网络连接失败：$message")
         return IOException(message)
     }
 
@@ -172,6 +184,7 @@ internal class KugouApi(private val session: () -> KugouSession) {
                 ineligible -> "当前账号暂不符合领取条件，请在官方客户端查看资格"
                 else -> "酷狗暂时无法完成请求" + code?.let { "（错误码 $it）" }.orEmpty()
             }
+            AppLogManager.w(TAG, "酷狗接口业务错误（错误码 $code）：$safeMessage")
             throw KugouApiException(code, safeMessage, expired, ineligible)
         }
     }

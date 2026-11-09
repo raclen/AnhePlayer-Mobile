@@ -229,7 +229,7 @@ fun LogSettingsScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "记录近期音源加载、电台请求、播放切换及错误异常，排查偶发播放故障时可复制发给开发者。",
+                    text = "记录近期音源加载、电台请求、酷狗专区登录/播放/领取及错误异常（仅保留最近 20 条），排查偶发播放故障时可复制发给开发者。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -105,6 +105,7 @@ import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.playback.queues.Queue
 import com.dd3boh.outertune.source.lx.LxSourceRuntime
+import com.dd3boh.outertune.utils.AppLogManager
 import com.dd3boh.outertune.utils.CoilBitmapLoader
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.dataStore
@@ -279,6 +280,7 @@ class MusicService : MediaLibraryService(),
             com.dd3boh.outertune.source.kugou.KugouConcept.accountState.collect { account ->
                 if (account.status != com.dd3boh.outertune.source.kugou.KugouAccountStatus.RESTORING) {
                     if (restoredAccountObserved && previousAccount != account.userId) {
+                        AppLogManager.i(TAG, "酷狗账号变化，清空概念版播放缓存")
                         conceptStreams.clear()
                         conceptRetries.clear()
                         if (com.dd3boh.outertune.source.SourceCapabilities.isConcept(currentMediaMetadata.value?.source)) {
@@ -287,6 +289,7 @@ class MusicService : MediaLibraryService(),
                     }
                     if (account.status == com.dd3boh.outertune.source.kugou.KugouAccountStatus.EXPIRED &&
                         com.dd3boh.outertune.source.SourceCapabilities.isConcept(currentMediaMetadata.value?.source)) {
+                        AppLogManager.i(TAG, "酷狗登录已失效，停止概念版播放")
                         conceptStreams.clear()
                         player.stop()
                     }
@@ -678,6 +681,7 @@ class MusicService : MediaLibraryService(),
                 val cached = existing ?: runBlocking(Dispatchers.IO) {
                     val stream = com.dd3boh.outertune.source.kugou.KugouConcept.resolveStream(conceptSong)
                     if (stream.access == com.dd3boh.outertune.source.kugou.KugouPlaybackAccess.PREVIEW) {
+                        AppLogManager.i(TAG, "酷狗概念版歌曲仅有试听权限，mediaId=$mediaId")
                         scope.launch(Dispatchers.Main) {
                             if (stream.sessionVersion == com.dd3boh.outertune.source.kugou.KugouConcept.sessionVersion.value) {
                                 Toast.makeText(this@MusicService, "这首歌当前仅有试听权限", Toast.LENGTH_LONG).show()
@@ -887,14 +891,19 @@ class MusicService : MediaLibraryService(),
             com.dd3boh.outertune.source.SourceCapabilities.isConcept(it.source)
         }?.id
         if (conceptId != null && error.errorCode in 2000..2999) {
+            AppLogManager.w(TAG, "酷狗概念版播放错误（${error.errorCode}）：${error.message ?: "未知错误"}")
             val cached = conceptStreams[conceptId]
             val attempts = conceptRetries[conceptId] ?: 0
             if (cached != null && attempts < 2 && isNetworkConnected.value &&
                 com.dd3boh.outertune.source.kugou.KugouConcept.accountState.value.status == com.dd3boh.outertune.source.kugou.KugouAccountStatus.SIGNED_IN) {
                 conceptRetries[conceptId] = attempts + 1
                 if (cached.candidate + 1 < cached.stream.urls.size) {
+                    AppLogManager.i(TAG, "酷狗概念版播放失败，切换备用地址重试（第 ${attempts + 1} 次）")
                     conceptStreams[conceptId] = cached.copy(candidate = cached.candidate + 1)
-                } else conceptStreams.remove(conceptId)
+                } else {
+                    AppLogManager.i(TAG, "酷狗概念版播放失败，备用地址已用尽，重新解析播放地址")
+                    conceptStreams.remove(conceptId)
+                }
                 player.prepare()
                 player.play()
                 return

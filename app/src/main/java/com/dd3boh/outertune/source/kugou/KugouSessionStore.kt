@@ -3,6 +3,7 @@ package com.dd3boh.outertune.source.kugou
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import com.dd3boh.outertune.utils.AppLogManager
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.security.KeyStore
@@ -29,6 +30,7 @@ internal data class KugouSession(
 }
 
 internal class KugouSessionStore(context: Context) {
+    private val TAG = "KugouSessionStore"
     private val prefs = context.getSharedPreferences("kugou_concept_secure", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val keyAlias = "anhe.kugou.session.v1"
@@ -48,8 +50,9 @@ internal class KugouSessionStore(context: Context) {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
             json.decodeFromString<KugouSession>(cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             // 换机或 Keystore 丢失时不能把不可解密的凭据当成有效会话。
+            AppLogManager.w(TAG, "酷狗会话解密失败，已清除本地凭据（可能是换机或系统密钥库丢失）", e)
             prefs.edit().remove("session").commit()
             KugouSession()
         }
