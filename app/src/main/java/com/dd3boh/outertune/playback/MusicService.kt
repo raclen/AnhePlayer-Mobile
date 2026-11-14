@@ -590,11 +590,18 @@ class MusicService : MediaLibraryService(),
 
     fun deInitQueue() {
         Log.i(TAG, "+deInitQueue()")
-        val pos = player.currentPosition
-        queueBoard.value.shutdown()
+        // 重复关闭且没有媒体时不再保存；系统直接续播后即使 qbInit 为 false 仍需保存。
+        if (!qbInit.value && player.currentMediaItem == null) return
+        val board = queueBoard.value
+        // 播放器状态只能在主线程读取；无媒体时保留队列原有断点，包括合法的 0 毫秒。
+        val pos = player.currentPosition.takeIf { player.currentMediaItem != null }
+        val data = snapshotQueuesForPersistence(board.getAllQueues(), board.getCurrentQueue()?.id, pos)
+        board.shutdown()
         if (dataStore.get(PersistentQueueKey, true)) {
             runBlocking(Dispatchers.IO) {
-                saveQueueToDisk(pos)
+                // 先等旧写入结束，避免它们在最终快照落盘后反向覆盖断点或排序。
+                board.awaitPendingWrites()
+                saveQueueToDisk(data)
             }
         }
         // do not replace the object. Can lead to entire queue being deleted even though it is supposed to be saved already
@@ -602,9 +609,13 @@ class MusicService : MediaLibraryService(),
         Log.i(TAG, "-deInitQueue()")
     }
 
-    suspend fun saveQueueToDisk(currentPosition: Long) {
-        val data = queueBoard.value.getAllQueues()
-        data.last().lastSongPos = currentPosition
+    private fun saveQueueToDisk(data: List<MultiQueueObject>) {
+        // 队列尚未从磁盘加载或已被清空时不能写库，
+        // 否则 updateAllQueues 里的 nukeAliens 会误删持久化队列。
+        if (data.isEmpty()) {
+            Log.w(TAG, "saveQueueToDisk: queue board is empty, skipping save")
+            return
+        }
         database.updateAllQueues(data)
     }
 
@@ -935,7 +946,7 @@ class MusicService : MediaLibraryService(),
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
-        if (!isPlaying) {
+        if (!isPlaying && player.currentMediaItem != null) {
             val pos = player.currentPosition
             val q = queueBoard.value.getCurrentQueue()
             q?.lastSongPos = pos
@@ -969,7 +980,10 @@ class MusicService : MediaLibraryService(),
         ) {
         }
 
-        queueBoard.value.setCurrQueuePosIndex(player.currentMediaItemIndex)
+        // 清空播放器的空媒体回调不能在最终保存后把歌曲索引和队列顺序写回旧值。
+        if (mediaItem != null) {
+            queueBoard.value.setCurrQueuePosIndex(player.currentMediaItemIndex)
+        }
 
         // reshuffle queue when shuffle AND repeat all are enabled
         // no, when repeat mode is on, player does not "STATE_ENDED"

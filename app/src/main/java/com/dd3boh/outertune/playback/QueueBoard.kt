@@ -31,6 +31,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -451,7 +453,7 @@ class QueueBoard(
                 masterIndex = -1
             }
 
-            CoroutineScope(Dispatchers.IO).launch {
+            coroutineScope.launch {
                 player.database.deleteQueue(match.id)
             }
         } else {
@@ -872,6 +874,11 @@ class QueueBoard(
     fun shutdown() {
         queueSongMap.clear()
         queueEntity.clear()
+    }
+
+    suspend fun awaitPendingWrites() {
+        // shutdown 只清除调度记录；已启动的写入和删除必须完成后才能保存最终快照。
+        coroutineScope.coroutineContext.job.children.toList().joinAll()
     }
 
     private fun saveQueueSongs(mq: MultiQueueObject) {

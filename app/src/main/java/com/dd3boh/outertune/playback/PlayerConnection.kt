@@ -282,7 +282,8 @@ class PlayerConnection(
 
     fun softKillPlayer() {
         Log.i(TAG, "Stopping player and uninitializing queue")
-        player.clearMediaItems()
+        // 清空播放器会重置播放位置，必须先保存断点。
         service.deInitQueue()
+        player.clearMediaItems()
     }
 }

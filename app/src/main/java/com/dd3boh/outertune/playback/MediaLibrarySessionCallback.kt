@@ -99,6 +99,10 @@ class MediaLibrarySessionCallback @Inject constructor(
     ): ListenableFuture<MediaItemsWithStartPosition> = scope.future(Dispatchers.IO) {
         // TODO: when this is stable, change to debug
         Log.i(TAG, "onPlaybackResumption() called. isForPlayback = $isForPlayback")
+        // 同一服务软关闭后，系统续播也要加载最终快照，避免旧内存索引覆盖已保存的顺序。
+        if (isForPlayback && !service.qbInit.value) {
+            service.initQueue()
+        }
         val q = database.getResumptionQueue()
         if (q == null) {
             Log.w(TAG, "No resumption queue data. Loading empty list")
