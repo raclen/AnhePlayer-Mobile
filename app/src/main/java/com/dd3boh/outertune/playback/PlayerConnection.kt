@@ -70,6 +70,10 @@ class PlayerConnection(
     fun dismissPlaybackErrorDialog() {
         service.dismissPlaybackErrorDialog()
     }
+
+    fun dismissPlaybackErrorDialogForToday() {
+        service.dismissPlaybackErrorDialogForToday()
+    }
     val mediaMetadata = MutableStateFlow(player.currentMetadata)
     val currentSong = mediaMetadata.flatMapLatest {
         database.song(it?.id)

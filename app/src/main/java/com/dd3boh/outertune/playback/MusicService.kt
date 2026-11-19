@@ -81,6 +81,7 @@ import com.dd3boh.outertune.constants.MediaSessionConstants.CommandToggleRepeatM
 import com.dd3boh.outertune.constants.MediaSessionConstants.CommandToggleShuffle
 import com.dd3boh.outertune.constants.PauseListenHistoryKey
 import com.dd3boh.outertune.constants.PersistentQueueKey
+import com.dd3boh.outertune.constants.PlaybackErrorDialogDismissedDayKey
 import com.dd3boh.outertune.constants.PlayerVolumeKey
 import com.dd3boh.outertune.constants.RepeatModeKey
 import com.dd3boh.outertune.constants.SkipOnErrorKey
@@ -138,6 +139,7 @@ import java.io.File
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlin.math.min
@@ -218,12 +220,32 @@ class MusicService : MediaLibraryService(),
     private var previousTransitionId: String? = null
 
     val playbackErrorDialogInfo = MutableStateFlow<com.dd3boh.outertune.models.PlaybackErrorDialogInfo?>(null)
+    private var playbackErrorDialogDismissedDay: Long? = null
 
     fun dismissPlaybackErrorDialog() {
         playbackErrorDialogInfo.value = null
     }
 
+    fun dismissPlaybackErrorDialogForToday() {
+        val today = LocalDate.now().toEpochDay()
+        // 先更新内存，避免 DataStore 写入完成前再次弹出；持久化后重启仍有效。
+        playbackErrorDialogDismissedDay = today
+        dismissPlaybackErrorDialog()
+        scope.launch(SilentHandler) {
+            dataStore.edit { preferences ->
+                preferences[PlaybackErrorDialogDismissedDayKey] = today
+            }
+        }
+    }
+
     private fun notifyPlaybackError(error: PlaybackException? = null) {
+        val dismissedDay = playbackErrorDialogDismissedDay
+            ?: dataStore.get(PlaybackErrorDialogDismissedDayKey, Long.MIN_VALUE).also {
+                playbackErrorDialogDismissedDay = it
+            }
+        // 每次错误都按设备本地自然日判断，跨天无需重启即可恢复提醒。
+        if (dismissedDay == LocalDate.now().toEpochDay()) return
+
         val currentSong = currentMediaMetadata.value
             ?: player.currentMetadata
             ?: player.currentMediaItem?.mediaId?.let { id ->

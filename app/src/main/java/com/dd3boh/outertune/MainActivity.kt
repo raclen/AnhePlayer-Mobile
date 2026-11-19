@@ -1068,13 +1068,8 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = {
                                         playerConnection?.dismissPlaybackErrorDialog()
                                     },
-                                    onOpenSettings = {
-                                        if (playerBottomSheetState.isExpanded) {
-                                            playerBottomSheetState.collapseSoft()
-                                        }
-                                        navController.navigate("settings/source") {
-                                            launchSingleTop = true
-                                        }
+                                    onDismissForToday = {
+                                        playerConnection?.dismissPlaybackErrorDialogForToday()
                                     },
                                 )
                             }
