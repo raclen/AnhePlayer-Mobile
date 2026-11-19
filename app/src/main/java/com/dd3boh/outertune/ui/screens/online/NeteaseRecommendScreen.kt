@@ -46,7 +46,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -376,12 +375,13 @@ private fun LoggedInHeader(
     onRefresh: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
-    ElevatedCard(
+    val colors = MaterialTheme.colorScheme
+
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        )
+        shape = RoundedCornerShape(18.dp),
+        color = colors.surfaceContainerLowest,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.65f))
     ) {
         Row(
             modifier = Modifier
@@ -425,9 +425,11 @@ private fun LoggedInHeader(
                     Text(
                         text = profile.nickname.ifBlank { "网易云音乐用户" },
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (profile.isVip) {
                         Spacer(Modifier.width(6.dp))
@@ -589,17 +591,19 @@ private fun TabBanner(
     onPlayAll: () -> Unit,
     onShufflePlay: () -> Unit
 ) {
-    ElevatedCard(
+    val colors = MaterialTheme.colorScheme
+
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        )
+        shape = RoundedCornerShape(18.dp),
+        color = colors.surfaceContainerLowest,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.65f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -607,10 +611,9 @@ private fun TabBanner(
             ) {
                 // 封面或专属视觉图标
                 Surface(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .clip(RoundedCornerShape(14.dp)),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    modifier = Modifier.size(64.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = colors.primary.copy(alpha = 0.1f)
                 ) {
                     if (!coverUrl.isNullOrBlank()) {
                         AsyncImage(
@@ -629,44 +632,57 @@ private fun TabBanner(
                             Icon(
                                 icon,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
+                                tint = colors.primary,
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     if (songCount > 0) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "精选收录 $songCount 首",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = colors.primary.copy(alpha = 0.08f),
+                                    shape = CircleShape
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "精选收录 $songCount 首",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            if (description.isNotBlank()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 20.sp,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             // 快捷播放动作条
             Row(
