@@ -2,7 +2,9 @@ package com.dd3boh.outertune.ui.screens.online
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.view.View
 import android.webkit.CookieManager
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,7 +83,7 @@ fun NeteaseLoginDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .fillMaxWidth(if (selectedTab == 1) 0.96f else 0.92f)
                 .clip(RoundedCornerShape(24.dp)),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -87,7 +91,7 @@ fun NeteaseLoginDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(if (selectedTab == 1) 14.dp else 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Header
@@ -278,18 +282,39 @@ private fun WebLoginTabContent(
     onCookieCaptured: (String) -> Unit
 ) {
     var isCaptured by remember { mutableStateOf(false) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val configuration = LocalConfiguration.current
+    val webViewHeight = (configuration.screenHeightDp.dp * 0.62f).coerceIn(400.dp, 600.dp)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(340.dp)
+            .height(webViewHeight)
     ) {
-        Text(
-            text = "在网页中完成登录后，将自动识别凭证并完成授权",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "支持双指缩放拖动；登录后自动提取凭证",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            IconButton(
+                onClick = { webViewRef?.reload() },
+                modifier = Modifier.size(26.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.Refresh,
+                    contentDescription = "刷新页面",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -301,10 +326,31 @@ private fun WebLoginTabContent(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
                     WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.userAgentString =
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        webViewRef = this
+                        isVerticalScrollBarEnabled = true
+                        isHorizontalScrollBarEnabled = true
+                        scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+
+                            // 启用手势双指缩放，隐藏系统默认控件
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+
+                            // 宽视口与自适应屏幕总览
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+
+                            defaultTextEncodingName = "UTF-8"
+                            cacheMode = WebSettings.LOAD_DEFAULT
+
+                            userAgentString =
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        }
 
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {

@@ -1,12 +1,14 @@
 package com.dd3boh.outertune.ui.screens.online
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -833,20 +835,20 @@ private fun UnloggedFeaturesList(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
             text = "专区特权功能",
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
         )
 
         FeatureGuideItem(
             icon = Icons.Rounded.Radio,
             title = "私人雷达",
-            desc = "网易云独家算法量身定制，每天为你更新 35 首专属定制歌曲。",
+            desc = "每天为你更新 35 首专属歌曲，发现更合口味的音乐。",
             tag = "算法定制",
             onClick = onLoginClick
         )
@@ -854,7 +856,7 @@ private fun UnloggedFeaturesList(
         FeatureGuideItem(
             icon = Icons.Rounded.Whatshot,
             title = "每日推荐",
-            desc = "每日清晨六点准时送达，探索口味契合的优质新歌与宝藏旋律。",
+            desc = "每天清晨六点更新，听见新歌与值得收藏的宝藏旋律。",
             tag = "晨间更新",
             onClick = onLoginClick
         )
@@ -862,7 +864,7 @@ private fun UnloggedFeaturesList(
         FeatureGuideItem(
             icon = Icons.Rounded.Waves,
             title = "私人漫游 FM",
-            desc = "随时随地随心听，伴随心境无限流动的个人电台模式。",
+            desc = "随心开启个人电台，让喜欢的音乐不间断陪伴。",
             tag = "无限电台",
             onClick = onLoginClick
         )
@@ -877,75 +879,100 @@ private fun FeatureGuideItem(
     tag: String,
     onClick: () -> Unit
 ) {
-    ElevatedCard(
+    val colors = MaterialTheme.colorScheme
+
+    Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.surfaceContainerLowest
+        ),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.65f)),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            draggedElevation = 0.dp,
+            disabledElevation = 0.dp
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primaryContainer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(
+                            color = colors.primary.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        tint = colors.primary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-            }
 
-            Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // 窄屏或大字体下允许标签换行，避免挤压标题。
+                FlowRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface,
+                        modifier = Modifier.align(Alignment.CenterVertically)
                     )
-                    Spacer(Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
+                            .align(Alignment.CenterVertically)
                             .background(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(6.dp)
+                                color = colors.primary.copy(alpha = 0.08f),
+                                shape = CircleShape
                             )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = tag,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 10.sp,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.primary,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = desc,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                Spacer(Modifier.width(12.dp))
+
+                Icon(
+                    Icons.Rounded.Lock,
+                    contentDescription = "需登录",
+                    tint = colors.outline,
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
-            Icon(
-                Icons.Rounded.Lock,
-                contentDescription = "需登录",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(18.dp)
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 20.sp,
+                color = colors.onSurfaceVariant
             )
         }
     }
