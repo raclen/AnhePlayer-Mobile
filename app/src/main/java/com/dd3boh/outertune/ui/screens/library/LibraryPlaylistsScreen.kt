@@ -71,7 +71,6 @@ import com.dd3boh.outertune.constants.PlaylistSortTypeKey
 import com.dd3boh.outertune.constants.PlaylistViewTypeKey
 import com.dd3boh.outertune.constants.ShowLikedAndDownloadedPlaylist
 import com.dd3boh.outertune.db.entities.PlaylistEntity
-import com.dd3boh.outertune.ui.component.ChipsRow
 import com.dd3boh.outertune.ui.component.EmptyPlaceholder
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.LazyVerticalGridScrollbar
@@ -133,7 +132,7 @@ fun LibraryPlaylistsScreen(
         )
     }
 
-    val filterContent = @Composable {
+    val permissionContent = @Composable {
         var showStoragePerm by remember {
             mutableStateOf(context.checkSelfPermission(MEDIA_PERMISSION_LEVEL) != PackageManager.PERMISSION_GRANTED)
         }
@@ -155,19 +154,6 @@ fun LibraryPlaylistsScreen(
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
-            }
-
-            Row {
-                ChipsRow(
-                    chips = listOf(
-                        PlaylistFilter.LIBRARY to stringResource(R.string.filter_library),
-                        PlaylistFilter.DOWNLOADED to stringResource(R.string.filter_downloaded)
-                    ),
-                    currentValue = filter,
-                    onValueUpdate = {
-                        filter = it
-                    }
-                )
             }
         }
     }
@@ -262,7 +248,7 @@ fun LibraryPlaylistsScreen(
                         key = "filter",
                         contentType = CONTENT_TYPE_HEADER
                     ) {
-                        libraryFilterContent?.let { it() } ?: filterContent()
+                        libraryFilterContent?.invoke() ?: permissionContent()
                     }
 
                     item(
@@ -347,7 +333,7 @@ fun LibraryPlaylistsScreen(
                         span = { GridItemSpan(maxLineSpan) },
                         contentType = CONTENT_TYPE_HEADER
                     ) {
-                        libraryFilterContent?.let { it() } ?: filterContent()
+                        libraryFilterContent?.invoke() ?: permissionContent()
                     }
 
                     item(

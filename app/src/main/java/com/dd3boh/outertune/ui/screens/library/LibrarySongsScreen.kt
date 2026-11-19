@@ -71,7 +71,6 @@ import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
-import com.dd3boh.outertune.ui.component.ChipsRow
 import com.dd3boh.outertune.ui.component.EmptyPlaceholder
 import com.dd3boh.outertune.ui.component.FloatingFooter
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
@@ -136,25 +135,6 @@ fun LibrarySongsScreen(
                 selection.remove(songId)
             }
         }
-    }
-
-    val filterContent = @Composable {
-        ChipsRow(
-            chips = listOf(
-                SongFilter.LIKED to stringResource(R.string.filter_liked),
-                SongFilter.LIBRARY to stringResource(R.string.filter_library),
-                SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
-                SongFilter.RECENT to stringResource(R.string.filter_recently_played),
-            ),
-            currentValue = filter,
-            onValueUpdate = {
-                if (it == SongFilter.RECENT) {
-                    navController.navigate("history")
-                } else {
-                    filter = it
-                }
-            }
-        )
     }
 
     val headerContent = @Composable {
@@ -292,7 +272,7 @@ fun LibrarySongsScreen(
                             )
                         }
                     }
-                    libraryFilterContent?.let { it() } ?: filterContent()
+                    libraryFilterContent?.invoke()
                 }
             }
 
