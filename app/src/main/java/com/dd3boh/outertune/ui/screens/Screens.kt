@@ -13,15 +13,19 @@ import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Leaderboard
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.dd3boh.outertune.R
@@ -38,6 +42,10 @@ sealed class Screens(
     data object Artists : Screens(R.string.artists, Icons.Rounded.Person, "artists")
     data object Albums : Screens(R.string.albums, Icons.Rounded.Album, "albums")
     data object Playlists : Screens(R.string.playlists, Icons.AutoMirrored.Rounded.QueueMusic, "playlists")
+    data object Toplist : Screens(R.string.toplist, Icons.Rounded.Leaderboard, "toplist")
+    data object RecommendSheets : Screens(R.string.recommend_sheets, Icons.Rounded.Whatshot, "recommend-sheets")
+    data object NeteaseRecommend : Screens(R.string.netease_recommend, Icons.Rounded.Waves, "netease-recommend")
+    data object Download : Screens(R.string.download_manager, Icons.Rounded.Download, "download")
     data object Kugou : Screens(R.string.kugou_zone, Icons.Rounded.Headphones, "kugou")
     data object Radio : Screens(R.string.radio, Icons.Rounded.Radio, "radio")
     data object Library : Screens(R.string.library, Icons.Rounded.LibraryMusic, "library")

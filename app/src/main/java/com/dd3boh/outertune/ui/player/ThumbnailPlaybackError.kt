@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -112,6 +113,37 @@ fun ThumbnailPlaybackError(
                 color = textColor,
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+        Spacer(Modifier.height(8.dp))
+        val uriHandler = LocalUriHandler.current
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = retry
+            ) {
+                Text(
+                    text = stringResource(R.string.retry),
+                    color = textColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            TextButton(
+                onClick = {
+                    try {
+                        uriHandler.openUri("https://anhe-player.loc.cc/sources/")
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            ) {
+                Text(
+                    text = "获取音源",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         AnimatedVisibility(!showStackTrace) {
             TextButton(

@@ -65,6 +65,11 @@ class PlayerConnection(
         playWhenReady && playbackState != STATE_ENDED
     }.stateIn(scope, SharingStarted.Lazily, player.playWhenReady && player.playbackState != STATE_ENDED)
     val waitingForNetworkConnection: StateFlow<Boolean> = service.waitingForNetworkConnection.asStateFlow()
+    val playbackErrorDialogInfo = service.playbackErrorDialogInfo.asStateFlow()
+
+    fun dismissPlaybackErrorDialog() {
+        service.dismissPlaybackErrorDialog()
+    }
     val mediaMetadata = MutableStateFlow(player.currentMetadata)
     val currentSong = mediaMetadata.flatMapLatest {
         database.song(it?.id)

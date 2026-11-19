@@ -40,6 +40,9 @@ import androidx.navigation.NavController
 import com.dd3boh.outertune.BuildConfig
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.ShowKugouKey
+import com.dd3boh.outertune.constants.ShowNeteaseRecommendKey
+import com.dd3boh.outertune.constants.ShowRadioKey
+import androidx.compose.material.icons.rounded.Waves
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
@@ -82,13 +85,29 @@ fun SettingsScreen(
                 icon = { Icon(Icons.Rounded.MusicNote, null) },
                 onClick = { navController.navigate("settings/kugou") },
             )
+            val (showNeteaseRecommend, onShowNeteaseRecommendChange) = rememberPreference(ShowNeteaseRecommendKey, defaultValue = true)
+            SwitchPreference(
+                title = { Text("显示网易云推荐") },
+                description = if (showNeteaseRecommend) "在左侧菜单「在线」中显示网易云推荐（关闭后隐藏）" else "已在左侧菜单中隐藏（开启后在「在线」显示）",
+                icon = { Icon(Icons.Rounded.Waves, null) },
+                checked = showNeteaseRecommend,
+                onCheckedChange = onShowNeteaseRecommendChange,
+            )
             val (showKugou, onShowKugouChange) = rememberPreference(ShowKugouKey, defaultValue = true)
             SwitchPreference(
                 title = { Text("显示酷狗专区") },
-                description = if (showKugou) "在侧边栏菜单中显示酷狗专区（关闭后在菜单隐藏）" else "已在侧边栏菜单中隐藏（开启后在菜单显示）",
+                description = if (showKugou) "在左侧菜单「在线」中显示酷狗专区（关闭后隐藏）" else "已在左侧菜单中隐藏（开启后在「在线」显示）",
                 icon = { Icon(Icons.Rounded.Headphones, null) },
                 checked = showKugou,
                 onCheckedChange = onShowKugouChange,
+            )
+            val (showRadio, onShowRadioChange) = rememberPreference(ShowRadioKey, defaultValue = true)
+            SwitchPreference(
+                title = { Text("显示电台") },
+                description = if (showRadio) "在左侧菜单「在线」中显示全球网络电台（关闭后隐藏）" else "已在左侧菜单中隐藏（开启后在「在线」显示）",
+                icon = { Icon(Icons.Rounded.Radio, null) },
+                checked = showRadio,
+                onCheckedChange = onShowRadioChange,
             )
             PreferenceEntry(
                 title = { Text("电台设置") },

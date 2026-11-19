@@ -138,6 +138,7 @@ import com.dd3boh.outertune.ui.component.rememberBottomSheetState
 import com.dd3boh.outertune.ui.component.MainNavigationDrawer
 import com.dd3boh.outertune.ui.component.MainNavigationTopBar
 import com.dd3boh.outertune.ui.component.AppUpdatePrompt
+import com.dd3boh.outertune.ui.component.PlaybackErrorDialog
 import com.dd3boh.outertune.ui.component.shimmer.ShimmerTheme
 import com.dd3boh.outertune.ui.menu.BottomSheetMenu
 import com.dd3boh.outertune.ui.menu.MenuState
@@ -152,6 +153,7 @@ import com.dd3boh.outertune.ui.screens.StatsScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistAlbumsScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistScreen
 import com.dd3boh.outertune.ui.screens.artist.ArtistSongsScreen
+import com.dd3boh.outertune.ui.screens.download.DownloadScreen
 import com.dd3boh.outertune.ui.screens.library.FolderScreen
 import com.dd3boh.outertune.ui.screens.library.LibraryAlbumsScreen
 import com.dd3boh.outertune.ui.screens.library.LibraryArtistsScreen
@@ -159,6 +161,9 @@ import com.dd3boh.outertune.ui.screens.library.LibraryFoldersScreen
 import com.dd3boh.outertune.ui.screens.library.LibraryPlaylistsScreen
 import com.dd3boh.outertune.ui.screens.library.LibraryScreen
 import com.dd3boh.outertune.ui.screens.library.LibrarySongsScreen
+import com.dd3boh.outertune.ui.screens.online.NeteaseRecommendScreen
+import com.dd3boh.outertune.ui.screens.online.RecommendSheetsScreen
+import com.dd3boh.outertune.ui.screens.online.ToplistScreen
 import com.dd3boh.outertune.ui.screens.playlist.AutoPlaylistScreen
 import com.dd3boh.outertune.ui.screens.playlist.LocalPlaylistScreen
 import com.dd3boh.outertune.ui.screens.search.OnlineSearchResult
@@ -627,6 +632,18 @@ class MainActivity : ComponentActivity() {
                                     composable(Screens.Playlists.route) {
                                         LibraryPlaylistsScreen(navController)
                                     }
+                                    composable(Screens.Toplist.route) {
+                                        ToplistScreen(navController)
+                                    }
+                                    composable(Screens.RecommendSheets.route) {
+                                        RecommendSheetsScreen(navController)
+                                    }
+                                    composable(Screens.NeteaseRecommend.route) {
+                                        NeteaseRecommendScreen(navController)
+                                    }
+                                    composable(Screens.Download.route) {
+                                        DownloadScreen(navController)
+                                    }
                                     composable(Screens.Kugou.route) {
                                         com.dd3boh.outertune.ui.screens.kugou.KugouHomeScreen(navController, scrollBehavior)
                                     }
@@ -1041,6 +1058,26 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("settings/about") { launchSingleTop = true }
                                 },
                             )
+
+                            val playbackErrorDialogInfo by playerConnection?.playbackErrorDialogInfo?.collectAsState()
+                                ?: remember { mutableStateOf(null) }
+
+                            playbackErrorDialogInfo?.let { info ->
+                                PlaybackErrorDialog(
+                                    info = info,
+                                    onDismiss = {
+                                        playerConnection?.dismissPlaybackErrorDialog()
+                                    },
+                                    onOpenSettings = {
+                                        if (playerBottomSheetState.isExpanded) {
+                                            playerBottomSheetState.collapseSoft()
+                                        }
+                                        navController.navigate("settings/source") {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                )
+                            }
 
                             if (BuildConfig.DEBUG) {
                                 val debugColour = Color.Red

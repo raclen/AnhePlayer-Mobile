@@ -276,4 +276,12 @@
     <string name="use_login_for_browse_desc">这可能会影响您看到的内容，例如，如果您使用会员账号登录，则会显示仅会员专辑</string>
     <string name="use_login_for_browse">登录账号浏览内容</string>
     <string name="action_login">登录</string>
+    <string name="toplist">排行榜</string>
+    <string name="recommend_sheets">热门歌单</string>
+    <string name="netease_recommend">网易云推荐</string>
+    <string name="download_manager">下载管理</string>
+    <string name="local_music">本地音乐</string>
+    <string name="recent_played">最近播放</string>
+    <string name="nav_online">在线</string>
+    <string name="nav_local">本地</string>
 </resources>

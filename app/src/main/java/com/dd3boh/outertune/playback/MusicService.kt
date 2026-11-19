@@ -217,6 +217,50 @@ class MusicService : MediaLibraryService(),
     private val conceptRetries = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private var previousTransitionId: String? = null
 
+    val playbackErrorDialogInfo = MutableStateFlow<com.dd3boh.outertune.models.PlaybackErrorDialogInfo?>(null)
+
+    fun dismissPlaybackErrorDialog() {
+        playbackErrorDialogInfo.value = null
+    }
+
+    private fun notifyPlaybackError(error: PlaybackException? = null) {
+        val currentSong = currentMediaMetadata.value
+            ?: player.currentMetadata
+            ?: player.currentMediaItem?.mediaId?.let { id ->
+                queueBoard.value.getCurrentQueue()?.findSong(id)
+            }
+            ?: queueBoard.value.getCurrentQueue()?.getCurrentSong()
+
+        val isLocal = currentSong?.isLocal == true
+        val source = currentSong?.source
+        val platformName = when {
+            isLocal -> "本地音乐"
+            com.dd3boh.outertune.source.SourceCapabilities.isConcept(source) -> "酷狗概念版"
+            source == "kg" -> "酷狗音乐"
+            source == "wy" -> "网易云音乐"
+            source == "tx" -> "QQ 音乐"
+            source == "kw" -> "酷我音乐"
+            source == "qs" -> "汽水音乐"
+            !source.isNullOrBlank() -> source
+            else -> "当前平台"
+        }
+
+        val detail = if (com.dd3boh.outertune.source.SourceCapabilities.isConcept(source) && error != null) {
+            com.dd3boh.outertune.source.kugou.KugouPlaybackProtocol.safeFailure(error)
+        } else null
+
+        playbackErrorDialogInfo.value = com.dd3boh.outertune.models.PlaybackErrorDialogInfo(
+            songTitle = currentSong?.title,
+            artistName = currentSong?.artists?.joinToString(", ") { it.name },
+            platformName = platformName,
+            source = source,
+            isLocal = isLocal,
+            detailMessage = detail,
+            errorCode = error?.errorCode,
+            errorMessage = error?.message,
+        )
+    }
+
     override fun onCreate() {
         Log.i(TAG, "Starting MusicService")
         super.onCreate()
@@ -863,7 +907,7 @@ class MusicService : MediaLibraryService(),
         Toast.makeText(this@MusicService, getString(R.string.wait_to_reconnect), Toast.LENGTH_LONG).show()
     }
 
-    fun skipOnError() {
+    fun skipOnError(error: PlaybackException? = null) {
         /**
          * Auto skip to the next media item on error.
          *
@@ -883,13 +927,13 @@ class MusicService : MediaLibraryService(),
         }
 
         player.pause()
-        Toast.makeText(this@MusicService, getString(R.string.err_stop_on_too_many_errors), Toast.LENGTH_LONG).show()
         consecutivePlaybackErr = 0
+        notifyPlaybackError(error)
     }
 
-    fun stopOnError() {
+    fun stopOnError(error: PlaybackException? = null) {
         player.pause()
-        Toast.makeText(this@MusicService, getString(R.string.err_stop_on_error), Toast.LENGTH_LONG).show()
+        notifyPlaybackError(error)
     }
 
 
@@ -930,22 +974,23 @@ class MusicService : MediaLibraryService(),
         }
 
         if (dataStore.get(SkipOnErrorKey, false)) {
-            skipOnError()
+            skipOnError(error)
         } else {
-            stopOnError()
+            stopOnError(error)
         }
 
         if (conceptId != null) conceptStreams.remove(conceptId)
-        Toast.makeText(
-            this@MusicService,
-            if (conceptId != null) com.dd3boh.outertune.source.kugou.KugouPlaybackProtocol.safeFailure(error)
-                ?: "酷狗音频连接失败（${error.errorCode}），请检查网络后重试；若持续失败，请刷新推荐或确认歌曲权限"
-            else "plr: ${error.message} (${error.errorCode}): ${error.cause?.message ?: ""} ",
-            Toast.LENGTH_LONG
-        ).show()
+        AppLogManager.e(
+            TAG,
+            "播放器错误（${error.errorCode}）：${error.message ?: "未知错误"}，原因：${error.cause?.message ?: "无"}",
+            error
+        )
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        if (isPlaying) {
+            playbackErrorDialogInfo.value = null
+        }
         if (!isPlaying && player.currentMediaItem != null) {
             val pos = player.currentPosition
             val q = queueBoard.value.getCurrentQueue()
@@ -956,6 +1001,7 @@ class MusicService : MediaLibraryService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
+        playbackErrorDialogInfo.value = null
         if (mediaItem?.mediaId != previousTransitionId) {
             mediaItem?.mediaId?.let { conceptRetries.remove(it) }
             previousTransitionId = mediaItem?.mediaId
