@@ -202,9 +202,9 @@ class MusicService : MediaLibraryService(),
 
     private val normalizeFactor = MutableStateFlow(1f)
 
-    private val audioDecoder = dataStore.get(AudioDecoderKey, DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-    private val isGaplessOffloadAllowed = dataStore.get(AudioGaplessOffloadKey, false)
-    val playerVolume = MutableStateFlow(dataStore.get(PlayerVolumeKey, 1f).coerceIn(0f, 1f))
+    private var audioDecoder = DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+    private var isGaplessOffloadAllowed = false
+    val playerVolume = MutableStateFlow(1f)
 
     private var isAudioEffectSessionOpened = false
 
@@ -286,6 +286,11 @@ class MusicService : MediaLibraryService(),
     override fun onCreate() {
         Log.i(TAG, "Starting MusicService")
         super.onCreate()
+
+        // Service 构造时尚未绑定 Context，持久化设置必须在 onCreate 中读取，并先于播放器初始化。
+        audioDecoder = dataStore.get(AudioDecoderKey, DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        isGaplessOffloadAllowed = dataStore.get(AudioGaplessOffloadKey, false)
+        playerVolume.value = dataStore.get(PlayerVolumeKey, 1f).coerceIn(0f, 1f)
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory()))
