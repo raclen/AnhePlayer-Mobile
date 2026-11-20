@@ -6,6 +6,8 @@ import android.os.HandlerThread
 import android.util.Base64
 import android.util.Log
 import com.dd3boh.outertune.BuildConfig
+import com.dd3boh.outertune.constants.LxActiveSourceIdKey
+import com.dd3boh.outertune.constants.LxSourceListKey
 import com.dd3boh.outertune.constants.LxSourceQualityKey
 import com.dd3boh.outertune.constants.LxSourceScriptKey
 import com.dd3boh.outertune.models.MediaMetadata
@@ -147,9 +149,7 @@ object LxSourceRuntime {
             val source = metadata.source ?: return null
             val musicInfo = metadata.sourceData?.let { lxJson.parseToJsonElement(it).jsonObject.toScriptMusicInfo() } ?: return null
 
-            val script = appContext.dataStore[LxSourceScriptKey]
-                ?.takeIf(String::isNotBlank)
-                ?: return null
+            val script = getActiveScript() ?: return null
             ensureLoaded(script)
 
             val requestKey = UUID.randomUUID().toString()
@@ -180,11 +180,26 @@ object LxSourceRuntime {
         }
     }
 
-    /** 读取用户导入的音源脚本；未导入时给出明确配置提示，不再回退内置音源 */
+    /** 读取用户激活的音源脚本；未导入时给出明确配置提示，不再回退内置音源 */
     private fun requireScript(): String =
-        appContext.dataStore[LxSourceScriptKey]
-            ?.takeIf(String::isNotBlank)
+        getActiveScript()
             ?: error("尚未导入洛雪音源，请前往「设置 → 洛雪音源」导入音源脚本")
+
+    /** 获取当前激活的音源脚本，优先从多音源列表读取激活项，平滑回退单音源键 */
+    private fun getActiveScript(): String? {
+        val rawList = appContext.dataStore[LxSourceListKey]
+        if (!rawList.isNullOrBlank()) {
+            val list = runCatching {
+                lxJson.decodeFromString<List<LxSourceItem>>(rawList)
+            }.getOrDefault(emptyList())
+            val activeId = appContext.dataStore[LxActiveSourceIdKey]
+            val activeItem = list.find { it.id == activeId } ?: list.firstOrNull()
+            if (activeItem != null && activeItem.script.isNotBlank()) {
+                return activeItem.script
+            }
+        }
+        return appContext.dataStore[LxSourceScriptKey]?.takeIf(String::isNotBlank)
+    }
 
     @Synchronized
     private fun ensureLoaded(script: String) {

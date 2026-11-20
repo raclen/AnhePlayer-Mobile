@@ -223,7 +223,7 @@ fun RecommendSheetsScreen(
                         RecommendSheetTile(
                             collection = item,
                             onClick = {
-                                navController.navigate("kugou/collection/special/${android.net.Uri.encode(item.id)}")
+                                navController.navigate("kugou/collection/playlist/${android.net.Uri.encode(item.id)}")
                             }
                         )
                     }

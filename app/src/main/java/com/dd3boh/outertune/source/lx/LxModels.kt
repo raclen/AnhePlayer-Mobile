@@ -2,9 +2,20 @@ package com.dd3boh.outertune.source.lx
 
 import com.dd3boh.outertune.models.MediaMetadata
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+
+@Serializable
+data class LxSourceItem(
+    val id: String,
+    val name: String,
+    val script: String,
+    val version: String? = null,
+    val url: String? = null,
+    val addedAt: Long = System.currentTimeMillis(),
+)
 
 @Serializable
 data class LxMusicInfo(

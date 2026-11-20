@@ -41,6 +41,8 @@ val ProxyTypeKey = stringPreferencesKey("proxyType")
  */
 val LxSourceScriptKey = stringPreferencesKey("lxSourceScript")
 val LxSourceNameKey = stringPreferencesKey("lxSourceName")
+val LxSourceListKey = stringPreferencesKey("lxSourceList")
+val LxActiveSourceIdKey = stringPreferencesKey("lxActiveSourceId")
 val LxSourceQualityKey = stringPreferencesKey("lxSourceQuality")
 val DownloadQualityKey = stringPreferencesKey("downloadQuality")
 

@@ -22,6 +22,8 @@ object LxSourceInstaller {
     data class ImportedScript(
         val name: String,
         val script: String,
+        val version: String? = null,
+        val url: String? = null,
     )
 
     suspend fun download(url: String): Result<ImportedScript> = withContext(Dispatchers.IO) {
@@ -43,16 +45,15 @@ object LxSourceInstaller {
                 check(bytes.size.toLong() <= MAX_SCRIPT_BYTES) { "音源脚本超过大小限制" }
                 val script = String(bytes, StandardCharsets.UTF_8)
                 check(script.isNotBlank()) { "音源脚本内容为空" }
-                ImportedScript(name = resolveName(uri), script = script)
+                val meta = LxSourceNameResolver.parseMeta(script)
+                val resolvedName = LxSourceNameResolver.resolve(script, trimmed)
+                ImportedScript(
+                    name = resolvedName,
+                    script = script,
+                    version = meta.version,
+                    url = trimmed,
+                )
             }
         }
-    }
-
-    private fun resolveName(uri: URI): String {
-        val rawName = uri.path.orEmpty().substringAfterLast('/')
-        val decoded = runCatching {
-            URLDecoder.decode(rawName, StandardCharsets.UTF_8.name())
-        }.getOrDefault(rawName)
-        return decoded.takeIf(String::isNotBlank) ?: FALLBACK_NAME
     }
 }
