@@ -2,24 +2,36 @@
 
 <img src="./assets/outertune.webp" height="88" alt="AnhePlayer 应用图标">
 
-AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次开发项目。项目保留原有 Material 3 界面、播放队列和 Media3 播放内核，在线搜索与播放链路接入酷我搜索和洛雪自定义音源。
+AnhePlayer 是基于 OuterTune/InnerTune 二次开发的 Android 音乐播放器。项目保留 Material 3 界面、播放队列和 Media3 播放内核，提供本地媒体库、多平台在线搜索、洛雪自定义音源、账号专区与在线电台。
 
-## 系统要求
+## 下载与系统要求
 
-- Android 7.0（API 24）及以上
-- 正式包分为两份，按手机架构安装，没有同时包含两种架构的 universal 包：
-  - `arm64-v8a`：64 位手机
-  - `armeabi-v7a`：32 位手机
+当前代码版本：**v2.0.35**（versionCode **235**）。版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
+
+- [下载最新正式版](https://github.com/raclen/AnhePlayer-Mobile/releases/latest)
+- [全部版本](https://github.com/raclen/AnhePlayer-Mobile/releases)
+- [GitHub Actions](https://github.com/raclen/AnhePlayer-Mobile/actions)
+
+支持 **Android 7.0（API 24）及以上**。正式发布仅提供两份 core APK，请按设备架构安装：
+
+| 架构 | 适用设备 |
+| --- | --- |
+| `arm64-v8a` | 64 位 ARM 设备 |
+| `armeabi-v7a` | 32 位 ARM 设备 |
+
+不提供 universal、x86 或 full 正式包。新版本的 APK 会在发布工作流构建完成后上传到 Release 页面。
 
 ## 界面预览
 
 <p align="center">
   <img src="./assets/微信图片_20260810082213_315_45.jpg" width="30%" alt="歌曲与媒体库">
   <img src="./assets/微信图片_20260810082214_316_45.jpg" width="30%" alt="搜索与音源切换">
-  <img src="https://img.meituan.net/content/b7b82e114a8b0c4da6b939030a9f3933729054.jpg" width="30%" alt="播放器">
+  <img src="./assets/微信图片_20260810082215_317_45.jpg" width="30%" alt="播放器">
 </p>
 
 <p align="center">歌曲与媒体库　·　搜索与音源切换　·　播放器</p>
+
+截图来自旧版本，仅供界面风格参考；当前功能与交互以实际安装版本为准。
 
 ## 当前功能
 
@@ -29,110 +41,167 @@ AnhePlayer 是一个 Android 本地音乐播放器和在线音乐播放器二次
   - 优先读取音频文件内嵌封面；最近播放与歌曲列表共享该回退逻辑
   - 优先读取音频标签中的内嵌歌词，不命中时才按设置使用同目录歌词或在线歌词源
   - 多播放队列、队列持久化和恢复
-- 洛雪在线音乐
-  - 支持在酷狗、网易云、QQ 音乐、酷我之间切换搜索歌曲、歌手、专辑和时长
-  - 先显示文本结果，再异步加载搜索响应自带的封面 URL
-  - 仅当前播放歌曲在封面缺失时按需补充封面
-  - 使用洛雪 JS 音源解析实际播放地址
-  - 在线播放和下载统一通过洛雪音源解析
-  - 音源脚本需由用户自行导入，不再内置默认音源
-  - 支持从本地 `.js` 文件或在线链接导入洛雪音源
-  - 支持 `128k`、`320k`、`flac`、`flac24bit` 音质选择
-  - 自动修正酷我封面 CDN 地址，兼容 Android HTTPS 网络环境
+- 洛雪在线音乐与统一搜索
+  - 支持酷狗、网易云、QQ 音乐、酷我、汽水五个平台，切换后查询当前平台，并非同时聚合搜索
+  - 同时匹配本地歌名与歌手，本地结果优先显示，切换在线平台不影响本地结果
+  - 先显示文字结果，再异步加载搜索响应自带的封面；仅当前播放歌曲在封面缺失时按需补充
+  - 搜索元数据不依赖用户音源脚本；播放与下载使用自行导入的洛雪 JS 音源解析地址
+  - 支持本地 `.js` 文件或在线链接导入，不内置默认音源
+  - 支持 `128k`、`320k`、`flac`、`flac24bit` 音质设置；播放按歌曲支持音质降级，下载音质独立设置
+- 酷狗概念版专区
+  - 在 **设置 → 酷狗账号** 通过扫码或短信验证码登录
+  - 使用登录账号直连取流，与洛雪酷狗来源隔离，不依赖洛雪脚本，也不降级给洛雪解析
+  - 仅支持在线播放，不下载、不导出、不使用永久磁盘播放缓存；可播放范围取决于账号与歌曲权益
+- 网易云推荐专区
+  - 从抽屉 **在线 → 网易云推荐** 进入，支持扫码、内嵌网页登录和手动 Cookie 登录
+  - 提供私人雷达、每日推荐、私人漫游/FM；账号资料与登录状态保存在本机
+  - 推荐歌曲进入应用播放队列后仍通过洛雪网易云来源解析，需导入可用音源；登录不会直接解锁会员音频
+  - 推荐内容取决于平台返回结果，私人雷达可能使用其他推荐内容兜底
+- 在线歌单导入
+  - 支持网易云、QQ 音乐、酷狗、酷我，不包含汽水歌单
+  - 支持歌单链接、分享文本、短链和手动选择平台后的歌单 ID
+  - 解析后预览曲目，可新建本地歌单或加入已有可编辑歌单，不是云端双向同步
 - 播放体验
-  - Material 3 界面和深色模式
+  - Material 3 界面、系统字体和浅色／深色主题
   - 后台播放和媒体通知
   - 歌词显示、LRC/TTML 等歌词格式
   - 音频均衡、速度和音调调整
   - Android Auto 支持
+  - 紧凑播放失败弹框：简短提示、音源帮助链接，以及「今日关闭」「知道了」两个按钮
+  - 「今日关闭」仅关闭当天的播放失败弹框，重启后当天仍有效，次日自动恢复；不改变重试或自动跳过行为
 - 在线电台
-  - 基于 Radio Browser 发现全球电台，默认收听中国地区与中文广播
-  - 极简 RoamDial 风格交互：呼吸状态灯、复古水平调频标尺、随波漫游（Roam）
-  - 码率、国家/地区、广播语言过滤全部抽离至「设置 → 电台设置」，保持主收听界面清爽纯粹
-  - 独立流媒体播放引擎，支持后台播放、音频焦点和电台收藏
+  - 基于 Radio Browser 发现电台，默认中国地区与中文广播
+  - 支持随波漫游（Roam）、后台收听与电台收藏
+  - 在 **设置 → 电台设置** 调整码率、国家/地区和广播语言过滤
+- 应用内更新
+  - 从 **关于** 页检查本仓库正式 Release；自动检查限频，同版本自动提醒不重复弹出
+  - 按设备架构下载对应 APK，使用系统 DownloadManager 执行后台下载
+  - 安装前校验包名、版本、签名兼容性及可用的 SHA-256，随后交给系统安装器；不进行静默安装
 
 ## 导入洛雪音源
 
-首次使用在线搜索前，需要先导入一个洛雪 JS 音源脚本：
+搜索可以先使用；通过洛雪来源播放或下载歌曲前，需要导入可用的 JS 音源脚本。网易云推荐歌曲也使用该解析路径，酷狗概念版账号直连播放不需要洛雪脚本。
 
-1. 打开应用搜索页。
-2. 进入 **设置 → 洛雪音源**。
-3. 选择一种导入方式：
-   - **导入本地音源脚本**：选择一个 `.js` 音源文件。
-   - **从在线链接导入**：粘贴指向 `.js` 音源脚本的 `http/https` 链接并确认。
-4. 在同一页面分别选择播放音质与下载音质：低品质（128k）、标准（320k）、高品质（FLAC）或 Hi-Res（FLAC 24bit）。
+1. 进入 **设置 → 洛雪音源**。
+2. 选择 **导入本地音源脚本**，打开 `.js` 文件；或选择 **从在线链接导入**，填写指向 `.js` 文件的 HTTP(S) 链接。
+3. 在同一页面分别选择播放音质和下载音质：128k、320k、FLAC 或 Hi-Res（FLAC 24bit）。
 
-音源脚本只保存在本机应用数据中；未导入音源时，在线播放会提示前往设置导入。
+音源脚本只保存在本机应用数据中，大小上限为 2 MiB；应用不内置默认音源。实际支持的平台与音质取决于导入脚本和歌曲，可在 [音源帮助网站](https://anhe-player.loc.cc/sources/) 查找相关说明。
 
-## 搜索与播放
+## 搜索、播放与下载
 
-1. 在搜索页输入歌曲名称，例如 `一路生花`。
-2. 在线结果默认来自酷我；搜索结果页可直接切换酷狗、网易云、QQ 音乐或酷我。
-3. 搜索阶段立即显示文字结果；可见歌曲的封面由 Coil 异步加载，不等待逐首封面请求。
-4. 点击歌曲后，应用将歌曲元数据转换为统一的 `MediaMetadata`，仅在当前歌曲封面缺失时补充封面。
-5. 播放服务根据歌曲的 `source` 信息调用洛雪 JS 音源解析播放地址；下载任务复用同一解析链路。
+1. 在搜索页输入歌名或歌手。搜索页支持在线／本地模式，并记忆模式选择。
+2. 在线结果页默认选择酷我，可切换酷狗、网易云、QQ 音乐、酷我或汽水；本地匹配结果始终排在在线结果之前。
+3. 点击歌曲后加入播放队列；洛雪来源调用用户脚本解析地址，酷狗概念版使用登录账号独立取流。
 
-在线源参数会随歌曲保存到本地数据库，队列重启恢复后仍然可以使用洛雪解析链路。
+歌曲的来源参数会随元数据保存到本地数据库，供队列恢复后继续选择正确的播放路径；恢复队列不等于缓存了在线音频。
 
-在 **设置 → 存储** 选择下载文件夹后，下载任务会直接将歌曲写入该目录；128k/320k 文件保存为 `.mp3`，FLAC/Hi-Res 文件保存为 `.flac`。下载音质独立于播放音质，不再使用或迁移应用内部的 Media3 下载缓存。
+在 **设置 → 存储** 选择下载文件夹后，可下载的洛雪歌曲会按独立下载音质保存到该目录：128k/320k 为 `.mp3`，FLAC/Hi-Res 为 `.flac`。酷狗概念版歌曲不支持下载或导出。
+
+播放失败时会显示简洁弹框：**知道了** 只关闭当前提示，**今日关闭** 关闭当天同类弹框，次日恢复；音源问题可点击 **音源帮助** 查看说明。
+
+## 导入在线歌单
+
+从歌单列表菜单，或可编辑歌单的菜单／详情页进入导入入口：
+
+1. 粘贴网易云、QQ 音乐、酷狗或酷我的歌单链接、分享文本或短链。
+2. 使用纯歌单 ID 时，先手动选择对应平台。
+3. 解析后预览歌曲，选择新建本地歌单或加入已有可编辑歌单。
+
+导入保存的是歌单与歌曲信息，不会直接下载音频，也不会同步回平台账号；实际播放仍需对应的可用来源。
 
 ## 架构说明
 
-```text
-搜索页
-  -> KuwoSearchClient
-  -> MediaMetadata(source/sourceId/sourceData)
-  -> MusicService / DownloadUtil
-  -> LxSourceRuntime (QuickJS)
-  -> 洛雪 JS 音源
-  -> Media3 播放器
-```
+UI 与播放队列统一使用 `MediaMetadata`。平台信息放入 `source`、`sourceId` 和 `sourceData`，随歌曲持久化，由统一来源边界决定解析与下载能力。
 
-- `source/lx/LxSearchClient.kt`：酷狗、网易云、QQ 音乐、酷我的搜索与封面元数据适配。
-- `source/lx/LxSourceRuntime.kt`：QuickJS 运行时、洛雪 API 和 HTTP Bridge。
-- `source/lx/LxSourceInstaller.kt`：本地/在线音源脚本导入与链接校验。
-- `app/src/main/assets/script/user-api-preload.js`：洛雪移动版 API 兼容层。
-- `MediaMetadata.sourceData`：保存音源所需的歌曲参数，不让平台字段渗透到 UI 和队列代码。
+- [LxSearchClient.kt](app/src/main/java/com/dd3boh/outertune/source/lx/LxSearchClient.kt)：五个平台的搜索元数据适配。
+- [SourceResolver.kt](app/src/main/java/com/dd3boh/outertune/source/SourceResolver.kt)：按来源选择洛雪或酷狗概念版的播放、歌词解析。
+- [SourceCapabilities.kt](app/src/main/java/com/dd3boh/outertune/source/SourceCapabilities.kt)：统一判断来源能力，隔离概念版的下载限制。
+- [LxSourceRuntime.kt](app/src/main/java/com/dd3boh/outertune/source/lx/LxSourceRuntime.kt)：QuickJS 运行时、洛雪 API 和 HTTP Bridge。
+- [LxSourceInstaller.kt](app/src/main/java/com/dd3boh/outertune/source/lx/LxSourceInstaller.kt)：本地／在线音源脚本导入与链接校验。
+- [KugouConcept.kt](app/src/main/java/com/dd3boh/outertune/source/kugou/KugouConcept.kt)：酷狗概念版账号与独立取流。
+- [NeteaseApi.kt](app/src/main/java/com/dd3boh/outertune/source/netease/NeteaseApi.kt)：网易云登录、账号资料与推荐内容。
+- [PlaylistImporter.kt](app/src/main/java/com/dd3boh/outertune/source/playlist/PlaylistImporter.kt)：在线歌单识别、解析与元数据导入。
+- [user-api-preload.js](app/src/main/assets/script/user-api-preload.js)：洛雪移动版 API 兼容桥接，不是默认音源脚本。
+- [updates](app/src/main/java/com/dd3boh/outertune/updates/)：正式版本检查、APK 下载与安装前校验。
 
 ## 构建
 
 ### 环境
 
-- Windows 11 或 Linux
-- JDK 21
-- Android SDK 36
-- Android NDK/CMake（本地 TagLib 模块需要）
+- Windows 11（Git Bash / PowerShell）或 Linux
+- JDK **21**
+- Android SDK Platform **36**、Build Tools **36.0.0**
+- Android NDK **29.0.13113456（r29-beta1）**、CMake **3.31.6**：完整 APK 构建所需的固定原生工具链
 
-### PowerShell
+SDK 组件可通过 Android Studio 的 SDK Manager 或 `sdkmanager` 安装；安装固定 beta NDK 时需启用 beta 渠道。不要随意替换模块声明的工具链版本。
 
-```powershell
-$env:JAVA_HOME = "PATH_TO_JDK_21"
-$env:ANDROID_SDK_ROOT = "PATH_TO_ANDROID_SDK"
-./gradlew.bat :app:assembleCoreDebug --no-configuration-cache
+### 本地命令（Git Bash / Linux）
+
+先将以下路径替换为本机的 JDK 与 Android SDK 安装位置：
+
+```bash
+export JAVA_HOME="PATH_TO_JDK_21"
 ```
 
-生成的 APK 位于：
-
-```text
-app/build/outputs/apk/core/debug/
+```bash
+export ANDROID_HOME="PATH_TO_ANDROID_SDK"
 ```
 
-Debug 包名为 `com.dd3boh.outertune.debug`，应用名称为 **AnhePlayer**，可与其他安装包并存。
+```bash
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+```
+
+仅校验 core Kotlin 编译与非 UI 单测，不生成 APK：
+
+```bash
+./gradlew :app:compileCoreDebugKotlin :app:testCoreDebugUnitTest --no-daemon "-Dkotlin.incremental=false"
+```
+
+构建 core Debug 安装包：
+
+```bash
+./gradlew :app:assembleCoreDebug --no-daemon "-Dkotlin.incremental=false"
+```
+
+构建结束后停止 Gradle 守护进程：
+
+```bash
+./gradlew --stop
+```
+
+PowerShell 下设置同名环境变量，并使用 `./gradlew.bat` 执行对应任务。生成的 Debug APK 位于 `app/build/outputs/apk/core/debug/`，包名为 `com.dd3boh.outertune.debug`，可与正式包并存。
+
+### 正式包与 CI
+
+- 正式包使用 `:app:assembleCoreRelease`，输出目录为 `app/build/outputs/apk/core/release/`。
+- 本地构建正式包必须提供有效的 `keystore.properties` 与对应签名文件；缺少正式签名配置时构建会失败。升级包必须沿用既有签名，不要提交私钥或密码。
+- `main` 的自动 push 只执行 core Kotlin 编译与非 UI 单测，不生成 Debug APK。
+- PR、canary 与手动触发保留 Debug 构建流程。
+- 推送 `v*` tag 会触发正式构建，并根据 [CHANGELOG.md](./CHANGELOG.md) 的对应版本段落发布 GitHub Release。
 
 ## 项目状态
 
-当前版本只保留本地音乐与洛雪在线音源两类功能。YouTube/InnerTube 登录、浏览、推荐、同步、队列、播放解析及构建模块均已移除；在线搜索、播放和下载不再依赖原平台接口。
+YouTube/InnerTube 登录、浏览、推荐、同步、队列、播放解析及构建模块均已移除，构建不再包含 `:innertube`。新增在线能力通过统一来源边界接入，不将平台专属类型传播到 UI 和播放队列。
+
+在线搜索结果不代表歌曲一定可播放；实际播放仍取决于用户音源、网络、平台版权及账号权益。开发与发布约束见 [PROJECT_RULES.md](./PROJECT_RULES.md)。
 
 ## 目录结构
 
 ```text
 app/src/main/java/com/dd3boh/outertune/
-  source/lx/          洛雪搜索与脚本运行时
+  source/             统一来源解析与能力边界
+    lx/               多平台搜索与洛雪脚本运行时
+    kugou/            酷狗概念版账号与直连播放
+    netease/          网易云账号与推荐接口
+    playlist/         在线歌单导入
   playback/           播放服务、队列和 Media3 接入
+  radio/              在线电台与独立播放管理
+  updates/            正式版本检查、下载与安装校验
   ui/screens/         Compose 页面
   db/                 Room 数据库和队列持久化
 app/src/main/assets/script/
-  user-api-preload.js
+  user-api-preload.js  洛雪 API 兼容桥接
 media/                本地 Media3 定制模块
 ```
 
