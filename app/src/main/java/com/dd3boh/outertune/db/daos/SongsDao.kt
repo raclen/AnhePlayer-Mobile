@@ -41,6 +41,21 @@ interface SongsDao {
     @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' AND isLocal = 1 LIMIT :previewSize")
     fun searchSongsAllLocal(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE isLocal = 1 AND (
+            albumName LIKE '%' || :query || '%'
+            OR id IN (
+                SELECT songId FROM song_album_map
+                JOIN album ON album.id = song_album_map.albumId
+                WHERE album.title LIKE '%' || :query || '%'
+            )
+        )
+        LIMIT :previewSize
+    """)
+    fun searchLocalAlbumSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
+
 
     /**
      * Does not include unavailable songs

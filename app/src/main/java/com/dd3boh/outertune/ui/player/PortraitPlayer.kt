@@ -127,6 +127,8 @@ import com.dd3boh.outertune.ui.component.showLyricsMenu
 import com.dd3boh.outertune.ui.component.toLyricsDisplay
 import com.dd3boh.outertune.ui.menu.PlayerMenu
 import com.dd3boh.outertune.ui.menu.SleepTimerDialog
+import com.dd3boh.outertune.ui.utils.albumBrowseRoute
+import com.dd3boh.outertune.ui.utils.artistBrowseRoute
 import com.dd3boh.outertune.ui.utils.fadingEdge
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
@@ -326,8 +328,8 @@ private fun PlayerHeader(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .basicMarquee(iterations = 1, initialDelayMillis = 3000)
-                    .clickable(enabled = mediaMetadata?.album != null) {
-                        mediaMetadata?.album?.id?.let { navController.navigate("album/$it") }
+                    .clickable(enabled = mediaMetadata?.albumBrowseRoute() != null) {
+                        mediaMetadata?.albumBrowseRoute()?.let(navController::navigate)
                         playerSheetState.collapseSoft()
                     }
             )
@@ -339,8 +341,8 @@ private fun PlayerHeader(
                         fontSize = 14.sp,
                         lineHeight = 19.sp,
                         maxLines = 1,
-                        modifier = Modifier.clickable(enabled = artist.id != null) {
-                            navController.navigate("artist/${artist.id}")
+                        modifier = Modifier.clickable(enabled = mediaMetadata?.artistBrowseRoute(artist) != null) {
+                            mediaMetadata?.artistBrowseRoute(artist)?.let(navController::navigate)
                             playerSheetState.collapseSoft()
                         }
                     )

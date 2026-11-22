@@ -120,10 +120,16 @@ interface AlbumsDao : ArtistsDao {
     @Transaction
     @Query("""
         SELECT album.*, count(song.dateDownload) downloadCount
-        FROM album_artist_map 
-            JOIN album ON album_artist_map.albumId = album.id
-            JOIN song ON album_artist_map.albumId = song.albumId
-        WHERE artistId = :artistId
+        FROM album
+            JOIN song_album_map ON song_album_map.albumId = album.id
+            JOIN song ON song_album_map.songId = song.id
+        WHERE album.id IN (
+            SELECT albumId FROM album_artist_map WHERE artistId = :artistId
+            UNION
+            SELECT song_album_map.albumId FROM song_album_map
+                JOIN song_artist_map ON song_artist_map.songId = song_album_map.songId
+            WHERE song_artist_map.artistId = :artistId
+        )
         GROUP BY album.id
         LIMIT :previewSize
     """)

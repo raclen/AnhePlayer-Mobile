@@ -147,6 +147,8 @@ import com.dd3boh.outertune.ui.component.rememberBottomSheetState
 import com.dd3boh.outertune.ui.menu.PlayerMenu
 import com.dd3boh.outertune.ui.theme.extractGradientColors
 import com.dd3boh.outertune.ui.utils.SnapLayoutInfoProvider
+import com.dd3boh.outertune.ui.utils.albumBrowseRoute
+import com.dd3boh.outertune.ui.utils.artistBrowseRoute
 import com.dd3boh.outertune.utils.coilCoroutine
 import com.dd3boh.outertune.utils.makeTimeString
 import com.dd3boh.outertune.utils.rememberEnumPreference
@@ -586,8 +588,8 @@ fun ControlsContent(
                                     iterations = 1,
                                     initialDelayMillis = 3000
                                 )
-                                .clickable(enabled = mediaMetadata?.album != null) {
-                                    navController.navigate("album/${mediaMetadata?.album!!.id}")
+                                .clickable(enabled = mediaMetadata?.albumBrowseRoute() != null) {
+                                    mediaMetadata?.albumBrowseRoute()?.let(navController::navigate)
                                     playerSheetState.collapseSoft()
                                 }
                         )
@@ -604,8 +606,8 @@ fun ControlsContent(
                                             iterations = 1,
                                             initialDelayMillis = 5000
                                         )
-                                        .clickable(enabled = artist.id != null) {
-                                            navController.navigate("artist/${artist.id}")
+                                        .clickable(enabled = mediaMetadata?.artistBrowseRoute(artist) != null) {
+                                            mediaMetadata?.artistBrowseRoute(artist)?.let(navController::navigate)
                                             playerSheetState.collapseSoft()
                                         }
                                 )

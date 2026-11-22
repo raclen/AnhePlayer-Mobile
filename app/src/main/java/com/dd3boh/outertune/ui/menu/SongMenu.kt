@@ -65,6 +65,8 @@ import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.ui.dialog.DetailsDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
+import com.dd3boh.outertune.ui.utils.albumBrowseRoute
+import com.dd3boh.outertune.ui.utils.artistBrowseRoute
 import com.dd3boh.outertune.utils.joinByBullet
 import com.dd3boh.outertune.utils.makeTimeString
 import com.dd3boh.outertune.utils.rememberEnumPreference
@@ -91,6 +93,9 @@ fun SongMenu(
     val queueBoard by playerConnection.queueBoard.collectAsState()
 
     val song = originalSong
+    val mediaMetadata = song.toMediaMetadata()
+    val browseArtists = mediaMetadata.artists.filter { mediaMetadata.artistBrowseRoute(it) != null }
+    val albumRoute = mediaMetadata.albumBrowseRoute()
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
     val coroutineScope =
         CoroutineScope(syncCoroutine) // rememberCoroutineScope has exception "rememberCoroutineScope left the composition"
@@ -227,24 +232,26 @@ fun SongMenu(
             )
 
 
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (song.artists.size == 1) {
-                navController.navigate("artist/${song.artists[0].id}")
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
+        if (browseArtists.isNotEmpty()) {
+            GridMenuItem(
+                icon = R.drawable.artist,
+                title = R.string.view_artist
+            ) {
+                if (browseArtists.size == 1) {
+                    mediaMetadata.artistBrowseRoute(browseArtists[0])?.let(navController::navigate)
+                    onDismiss()
+                } else {
+                    showSelectArtistDialog = true
+                }
             }
         }
-        if (song.song.albumId != null && !song.song.isLocal) {
+        if (albumRoute != null) {
             GridMenuItem(
                 icon = Icons.Rounded.Album,
                 title = R.string.view_album
             ) {
                 onDismiss()
-                navController.navigate("album/${song.song.albumId}")
+                navController.navigate(albumRoute)
             }
         }
         GridMenuItem(
@@ -337,8 +344,11 @@ fun SongMenu(
     if (showSelectArtistDialog) {
         ArtistDialog(
             navController = navController,
-            artists = song.artists,
-            onDismiss = { showSelectArtistDialog = false }
+            mediaMetadata = mediaMetadata,
+            onDismiss = {
+                showSelectArtistDialog = false
+                onDismiss()
+            }
         )
     }
 

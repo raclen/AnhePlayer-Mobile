@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -51,7 +52,7 @@ import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.rememberEnumPreference
-import com.dd3boh.outertune.utils.urlEncode
+import com.dd3boh.outertune.ui.utils.songSearchRoute
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +91,7 @@ fun SearchBarContainer(
                 focusManager.clearFocus(true)
             } else {
                 onSearchActiveChange(false)
-                navController.navigate("search/${it.urlEncode()}")
+                navController.navigate(songSearchRoute(it, navBackStackEntry?.arguments?.getString("source")))
                 if (context.dataStore[PauseSearchHistoryKey] != true) {
                     database.query {
                         insert(SearchHistory(query = it))
@@ -106,7 +107,11 @@ fun SearchBarContainer(
         searchActive || currentRoute?.startsWith("search") == true
     }
 
-    LaunchedEffect(currentRoute) {
+    LaunchedEffect(navBackStackEntry) {
+        if (currentRoute?.startsWith("search/") == true) {
+            val routeQuery = navBackStackEntry?.arguments?.getString("query").orEmpty()
+            onQueryChange(TextFieldValue(routeQuery, TextRange(routeQuery.length)))
+        }
         if (currentRoute == "search") {
             searchActive = true
             searchBarFocusRequester.requestFocus()
@@ -225,7 +230,7 @@ fun SearchBarContainer(
                         onQueryChange = onQueryChange,
                         navController = navController,
                         onSearch = {
-                            navController.navigate("search/${it.urlEncode()}")
+                            navController.navigate(songSearchRoute(it, navBackStackEntry?.arguments?.getString("source")))
                             if (context.dataStore[PauseSearchHistoryKey] != true) {
                                 database.query {
                                     insert(SearchHistory(query = it))

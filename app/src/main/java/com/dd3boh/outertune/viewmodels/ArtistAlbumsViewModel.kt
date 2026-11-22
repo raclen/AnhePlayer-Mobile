@@ -18,6 +18,6 @@ class ArtistAlbumsViewModel @Inject constructor(
     val artist = database.artist(artistId)
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-    val albums = database.artistAlbumsPreview(artistId)
+    val albums = database.artistAlbumsPreview(artistId, Int.MAX_VALUE)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 }

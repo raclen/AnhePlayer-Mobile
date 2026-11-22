@@ -94,7 +94,11 @@ fun ArtistScreen(
                 }
             }
             if (songs.isNotEmpty()) {
-                item { NavigationTitle("歌曲") }
+                item {
+                    NavigationTitle("歌曲", onClick = {
+                        navController.navigate("artist/${viewModel.artistId}/songs")
+                    })
+                }
                 itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
                     SongListItem(
                         song = song,
@@ -121,7 +125,11 @@ fun ArtistScreen(
                 }
             }
             if (albums.isNotEmpty()) {
-                item { NavigationTitle("专辑") }
+                item {
+                    NavigationTitle("专辑", onClick = {
+                        navController.navigate("artist/${viewModel.artistId}/albums")
+                    })
+                }
                 items(albums, key = { it.id }) { album ->
                     AlbumGridItem(
                         album = album,

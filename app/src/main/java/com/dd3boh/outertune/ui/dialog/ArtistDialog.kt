@@ -23,24 +23,25 @@ import com.dd3boh.outertune.constants.ListItemHeight
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.ui.utils.artistBrowseRoute
 
 @JvmName("ArtistDialogMediaMetadataArtist")
 @Composable
 fun ArtistDialog(
     navController: NavController,
-    artists: List<MediaMetadata.Artist>,
+    mediaMetadata: MediaMetadata,
     onDismiss: () -> Unit,
 ) {
     ListDialog(
         onDismiss = onDismiss
     ) {
-        items(artists) { artist ->
+        items(mediaMetadata.artists.filter { mediaMetadata.artistBrowseRoute(it) != null }) { artist ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .height(ListItemHeight)
                     .clickable {
-                        navController.navigate("artist/${artist.id}")
+                        mediaMetadata.artistBrowseRoute(artist)?.let(navController::navigate)
                         onDismiss()
                     }
                     .padding(horizontal = 12.dp),
@@ -51,7 +52,7 @@ fun ArtistDialog(
                         .fillParentMaxWidth()
                         .height(ListItemHeight)
                         .clickable {
-                            navController.navigate("artist/${artist.id}")
+                            mediaMetadata.artistBrowseRoute(artist)?.let(navController::navigate)
                             onDismiss()
                         }
                         .padding(horizontal = 24.dp),

@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.viewmodels
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.constants.PauseSearchHistoryKey
@@ -38,8 +39,11 @@ import javax.inject.Inject
 class KugouSearchViewModel @Inject constructor(
     private val database: MusicDatabase,
     @ApplicationContext private val context: Context,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(KugouSearchUiState())
+    private val mutableState = MutableStateFlow(
+        KugouSearchUiState(query = savedStateHandle.get<String>("query").orEmpty())
+    )
     val state = mutableState.asStateFlow()
     private val historyQuery = MutableStateFlow("")
     val history = historyQuery.flatMapLatest { database.searchHistory(it.trim()) }
@@ -89,8 +93,9 @@ class KugouSearchViewModel @Inject constructor(
             combine(
                 database.searchSongsAllLocal(keyword, 30),
                 database.searchLocalArtistSongs(keyword, 30),
-            ) { titleMatches, artistMatches ->
-                (titleMatches + artistMatches).distinctBy { it.id }.take(30).map { it.toMediaMetadata() }
+                database.searchLocalAlbumSongs(keyword, 30),
+            ) { titleMatches, artistMatches, albumMatches ->
+                (titleMatches + artistMatches + albumMatches).distinctBy { it.id }.take(30).map { it.toMediaMetadata() }
             }.collect { songs ->
                 if (request == generation) mutableState.update { it.copy(localSongs = songs) }
             }

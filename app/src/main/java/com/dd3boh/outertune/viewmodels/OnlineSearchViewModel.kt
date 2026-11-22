@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.net.URLDecoder
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,16 +25,21 @@ class OnlineSearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     database: MusicDatabase,
 ) : ViewModel() {
-    val query = URLDecoder.decode(savedStateHandle.get<String>("query").orEmpty(), "UTF-8")
+    // Navigation 已解码参数，再次 URLDecoder 会破坏名称中的 + 和 %。
+    val query = savedStateHandle.get<String>("query").orEmpty()
+    private val initialSource = LxSearchSource.entries.firstOrNull {
+        it.sourceId == savedStateHandle.get<String>("source")
+    } ?: LxSearchSource.KUWO
     private val remoteViewState = MutableStateFlow(
-        LxSearchViewState(source = LxSearchSource.KUWO, isLoading = true)
+        LxSearchViewState(source = initialSource, isLoading = true)
     )
     private var searchJob: Job? = null
     private val localSongs = combine(
         database.searchSongsAllLocal(query, LOCAL_RESULT_LIMIT),
         database.searchLocalArtistSongs(query, LOCAL_RESULT_LIMIT),
-    ) { titleMatches, artistMatches ->
-        (titleMatches + artistMatches)
+        database.searchLocalAlbumSongs(query, LOCAL_RESULT_LIMIT),
+    ) { titleMatches, artistMatches, albumMatches ->
+        (titleMatches + artistMatches + albumMatches)
             .distinctBy { it.id }
             .take(LOCAL_RESULT_LIMIT)
     }
@@ -44,11 +48,11 @@ class OnlineSearchViewModel @Inject constructor(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        LxSearchViewState(isLoading = true),
+        LxSearchViewState(source = initialSource, isLoading = true),
     )
 
     init {
-        selectSource(LxSearchSource.KUWO)
+        selectSource(initialSource)
     }
 
     fun selectSource(source: LxSearchSource) {

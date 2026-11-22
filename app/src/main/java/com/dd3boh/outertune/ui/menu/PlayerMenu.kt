@@ -90,6 +90,8 @@ import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.ui.dialog.DetailsDialog
+import com.dd3boh.outertune.ui.utils.albumBrowseRoute
+import com.dd3boh.outertune.ui.utils.artistBrowseRoute
 import com.dd3boh.outertune.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -116,6 +118,8 @@ fun PlayerMenu(
     onDismiss: () -> Unit,
 ) {
     mediaMetadata ?: return
+    val browseArtists = mediaMetadata.artists.filter { mediaMetadata.artistBrowseRoute(it) != null }
+    val albumRoute = mediaMetadata.albumBrowseRoute()
     val context = LocalContext.current
     val database = LocalDatabase.current
     val downloadUtil = LocalDownloadUtil.current
@@ -278,24 +282,26 @@ fun PlayerMenu(
                 }
             }
         }
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (mediaMetadata.artists.size == 1) {
-                navController.navigate("artist/${mediaMetadata.artists[0].id}")
-                playerBottomSheetState.collapseSoft()
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
+        if (browseArtists.isNotEmpty()) {
+            GridMenuItem(
+                icon = R.drawable.artist,
+                title = R.string.view_artist
+            ) {
+                if (browseArtists.size == 1) {
+                    mediaMetadata.artistBrowseRoute(browseArtists[0])?.let(navController::navigate)
+                    playerBottomSheetState.collapseSoft()
+                    onDismiss()
+                } else {
+                    showSelectArtistDialog = true
+                }
             }
         }
-        if (mediaMetadata.album != null && !mediaMetadata.isLocal) {
+        if (albumRoute != null) {
             GridMenuItem(
                 icon = R.drawable.album,
                 title = R.string.view_album
             ) {
-                navController.navigate("album/${mediaMetadata.album.id}")
+                navController.navigate(albumRoute)
                 playerBottomSheetState.collapseSoft()
                 onDismiss()
             }
@@ -383,10 +389,11 @@ fun PlayerMenu(
     if (showSelectArtistDialog) {
         ArtistDialog(
             navController = navController,
-            artists = mediaMetadata.artists,
+            mediaMetadata = mediaMetadata,
             onDismiss = {
                 playerBottomSheetState.collapseSoft()
                 showSelectArtistDialog = false
+                onDismiss()
             }
         )
     }
