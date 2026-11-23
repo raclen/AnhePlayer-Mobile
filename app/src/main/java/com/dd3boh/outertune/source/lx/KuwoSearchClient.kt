@@ -7,11 +7,12 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.HttpTimeout
+import kotlinx.coroutines.CancellationException
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 object KuwoSearchClient {
     private const val SEARCH_URL = "https://search.kuwo.cn/r.s"
@@ -22,7 +23,7 @@ object KuwoSearchClient {
 
     private data class SearchCacheEntry(
         val createdAt: Long,
-        val songs: List<LxMusicInfo>,
+        val result: LxPage<LxMusicInfo>,
     )
 
     private val searchCache = object : LinkedHashMap<String, SearchCacheEntry>(SEARCH_CACHE_SIZE, 0.75f, true) {
@@ -31,18 +32,24 @@ object KuwoSearchClient {
     }
 
     private val client = HttpClient(OkHttp) {
+        install(HttpTimeout) { requestTimeoutMillis = 15_000 }
         defaultRequest {
             headers.append("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
         }
     }
 
-    suspend fun search(query: String, page: Int = 1, limit: Int = 15): Result<List<LxMusicInfo>> = runCatching {
+    suspend fun search(query: String, page: Int = 1, limit: Int = 15): Result<List<LxMusicInfo>> =
+        searchPage(query, page, limit).map { it.items }
+
+    suspend fun searchPage(query: String, page: Int = 1, limit: Int = 15): Result<LxPage<LxMusicInfo>> = runCatching {
         val normalizedQuery = query.trim()
+        check(normalizedQuery.isNotEmpty()) { "搜索关键词不能为空" }
+        require(page > 0 && limit in 1..15) { "搜索分页参数无效" }
         val cacheKey = "$normalizedQuery|$page|$limit"
         synchronized(searchCache) {
             searchCache[cacheKey]
                 ?.takeIf { System.currentTimeMillis() - it.createdAt < SEARCH_CACHE_TTL_MS }
-                ?.songs
+                ?.result
         }?.let { return@runCatching it }
 
         val response = client.get(SEARCH_URL) {
@@ -65,20 +72,27 @@ object KuwoSearchClient {
             parameter("issubtitle", "1")
         }
         check(response.status.isSuccess()) { "酷我搜索请求失败：${response.status}" }
-        val root = lxJson.parseToJsonElement(response.body<String>()) as JsonObject
-        val items = root["abslist"] as? JsonArray ?: JsonArray(emptyList())
-        items.mapNotNull { (it as? JsonObject)?.toMusicInfo() }.also { songs ->
+        val root = lxJson.parseToJsonElement(response.body<String>()) as? JsonObject
+            ?: error("酷我搜索返回了无效数据")
+        val items = root["abslist"] as? JsonArray ?: error("酷我搜索缺少歌曲列表")
+        LxPage(
+            items.mapNotNull { (it as? JsonObject)?.let(::parseMusicInfo) }.distinctBy { it.id },
+            items.isNotEmpty() && (root.string("TOTAL").toLongOrNull()?.let { page.toLong() * limit < it }
+                ?: (items.size >= limit)),
+        ).also { result ->
             synchronized(searchCache) {
-                searchCache[cacheKey] = SearchCacheEntry(System.currentTimeMillis(), songs)
+                searchCache[cacheKey] = SearchCacheEntry(System.currentTimeMillis(), result)
             }
         }
-    }
+    }.onFailure { if (it is CancellationException) throw it }
+
+    internal fun parseMusicInfo(item: JsonObject): LxMusicInfo? = item.toMusicInfo()
 
     private fun JsonObject.toMusicInfo(): LxMusicInfo? {
-        val songId = string("MUSICRID").removePrefix("MUSIC_").ifBlank { return null }
-        val title = decode(string("SONGNAME").ifBlank { string("NAME") })
-        val singer = decode(string("ARTIST"))
-        val albumName = decode(string("ALBUM"))
+        val songId = string("MUSICRID", "id").removePrefix("MUSIC_").ifBlank { return null }
+        val title = decode(string("SONGNAME", "NAME", "name"))
+        val singer = decode(string("ARTIST", "artist"))
+        val albumName = decode(string("ALBUM", "album"))
         val qualities = parseQualities(string("N_MINFO").ifBlank { string("MINFO") })
         return LxMusicInfo(
             id = "kw_$songId",
@@ -86,11 +100,11 @@ object KuwoSearchClient {
             name = title,
             singer = singer,
             source = "kw",
-            interval = string("DURATION").toIntOrNull()?.let { "%02d:%02d".format(it / 60, it % 60) },
+            interval = string("DURATION", "duration").toIntOrNull()?.let { "%02d:%02d".format(it / 60, it % 60) },
             meta = LxMusicMeta(
                 songId = songId,
                 albumName = albumName,
-                albumId = string("ALBUMID").takeIf(String::isNotBlank),
+                albumId = string("ALBUMID", "albumid").takeIf(String::isNotBlank),
                 picUrl = directCoverUrl(),
                 qualitys = qualities,
                 _qualitys = qualities.associate { it.type to LxQualityInfo(it.size) },
@@ -110,6 +124,7 @@ object KuwoSearchClient {
     }.getOrNull()
 
     private fun JsonObject.directCoverUrl(): String? {
+        string("albumpic").takeIf { it.startsWith("http") }?.let { return normalizeCoverUrl(it) }
         val albumCoverPath = string("web_albumpic_short")
             .replace(coverSizePrefix, "")
             .takeIf(String::isNotBlank)
@@ -155,7 +170,9 @@ object KuwoSearchClient {
         return qualityOrder.mapNotNull { type -> found[type]?.let { LxQuality(type, it) } ?: if (found.containsKey(type)) LxQuality(type) else null }
     }
 
-    private fun JsonObject.string(key: String) = this[key]?.jsonPrimitive?.contentOrNull.orEmpty()
+    private fun JsonObject.string(vararg keys: String): String = keys.firstNotNullOfOrNull {
+        (this[it] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+    }.orEmpty()
 
     private fun decode(value: String): String =
         if ('&' !in value && '<' !in value) value

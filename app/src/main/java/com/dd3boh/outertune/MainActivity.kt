@@ -670,7 +670,7 @@ class MainActivity : ComponentActivity() {
                                     composable(
                                         route = "search",
                                     ) {
-                                        SearchBarContainer(navController, scrollBehavior)
+                                        // 搜索栏由外层统一显示，避免两个输入框争抢焦点。
                                     }
                                     composable(
                                         route = "search/{query}?source={source}",
@@ -685,6 +685,16 @@ class MainActivity : ComponentActivity() {
                                         )
                                     ) {
                                         OnlineSearchResult(navController)
+                                    }
+                                    composable(
+                                        route = "online_playlist/{source}/{id}?title={title}",
+                                        arguments = listOf(
+                                            navArgument("source") { type = NavType.StringType },
+                                            navArgument("id") { type = NavType.StringType },
+                                            navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                                        ),
+                                    ) {
+                                        com.dd3boh.outertune.ui.screens.search.OnlinePlaylistScreen(navController, scrollBehavior)
                                     }
                                     composable(
                                         route = "album/{albumId}",

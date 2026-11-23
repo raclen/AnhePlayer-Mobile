@@ -114,7 +114,6 @@ fun SearchBarContainer(
         }
         if (currentRoute == "search") {
             searchActive = true
-            searchBarFocusRequester.requestFocus()
         } else if (searchActive) {
             onSearchActiveChange(false)
         }

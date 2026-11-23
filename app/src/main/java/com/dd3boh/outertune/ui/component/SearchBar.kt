@@ -57,7 +57,9 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -76,6 +78,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -258,6 +261,16 @@ private fun SearchBarInputField(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     focusRequester: FocusRequester = remember { FocusRequester() },
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(active) {
+        if (active) {
+            // 输入框进入组合并完成布局后再获取焦点，兼容导航和展开动画。
+            withFrameNanos { }
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
     val searchSemantics = "Search" // getString(Strings.SearchBarSearch) R.string.m3c_search_bar_search
     val suggestionsAvailableSemantics = "Suggestions below" // getString(Strings.SuggestionsAvailable) R.string.m3c_suggestions_available
     val textColor = LocalTextStyle.current.color.takeOrElse {

@@ -21,6 +21,9 @@ fun songSearchRoute(query: String, source: String? = null): String {
     }
 }
 
+fun onlinePlaylistRoute(playlist: com.dd3boh.outertune.source.lx.LxPlaylistInfo): String =
+    "online_playlist/${playlist.source.sourceId}/${playlist.id.urlEncode()}?title=${playlist.name.urlEncode()}"
+
 fun MediaMetadata.artistBrowseRoute(artist: MediaMetadata.Artist): String? {
     // 在线歌手没有可供本地详情页查询的 ID；入库生成的 ID 也不是平台歌手 ID。
     return if (isLocal && !artist.id.isNullOrBlank()) {
