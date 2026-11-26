@@ -8,6 +8,10 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -15,7 +19,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 
 data class LxPlaylistInfo(
     val id: String,
@@ -30,7 +36,7 @@ data class LxPage<T>(val items: List<T>, val hasMore: Boolean)
 
 /** 只读取公开歌单元数据，歌曲取流仍经过洛雪边界，不访问概念版账号。 */
 object LxPlaylistClient {
-    private val client by lazy {
+    internal val client by lazy {
         HttpClient(OkHttp) {
             install(HttpTimeout) {
                 requestTimeoutMillis = PLAYLIST_TIMEOUT_MS
@@ -43,13 +49,23 @@ object LxPlaylistClient {
         }
     }
     private val api by lazy {
-        LxPlaylistApi { url, parameters, referer ->
-            val response = client.get(url) {
-                parameters.forEach { (key, value) -> parameter(key, value) }
-                header("Referer", referer)
-            }
-            LxPlaylistHttpResponse(response.status.value, response.body<String>())
-        }
+        LxPlaylistApi(
+            request = { url, parameters, referer ->
+                val response = client.get(url) {
+                    parameters.forEach { (key, value) -> parameter(key, value) }
+                    header("Referer", referer)
+                }
+                LxPlaylistHttpResponse(response.status.value, response.body<String>())
+            },
+            postRequest = { url, jsonBody, referer ->
+                val response = client.post(url) {
+                    header("Referer", referer)
+                    contentType(ContentType.Application.Json)
+                    setBody(jsonBody)
+                }
+                LxPlaylistHttpResponse(response.status.value, response.body<String>())
+            },
+        )
     }
 
     fun supports(source: LxSearchSource): Boolean = when (source) {
@@ -64,15 +80,18 @@ object LxPlaylistClient {
         api.songs(id, source, page)
 }
 
-private const val PLAYLIST_LIMIT = 15
-private const val PLAYLIST_TIMEOUT_MS = 15_000L
-private val playlistIdPattern = Regex("[1-9][0-9]*")
+internal const val PLAYLIST_LIMIT = 15
+internal const val PLAYLIST_TIMEOUT_MS = 15_000L
+internal val playlistIdPattern = Regex("[1-9][0-9]*")
 private class PlaylistResponseException(message: String) : IllegalStateException(message)
 internal data class LxPlaylistHttpResponse(val status: Int, val body: String)
 
 /** 注入 HTTP 和时钟以验证协议；缓存只保存元数据，整个操作最多等待 15 秒。 */
 internal class LxPlaylistApi(
     private val now: () -> Long = System::currentTimeMillis,
+    private val postRequest: suspend (String, String, String) -> LxPlaylistHttpResponse = { _, _, _ ->
+        LxPlaylistHttpResponse(404, "")
+    },
     private val request: suspend (String, Map<String, String>, String) -> LxPlaylistHttpResponse,
 ) {
     private data class CacheKey(val source: LxSearchSource, val value: String, val page: Int, val songs: Boolean)
@@ -164,18 +183,7 @@ internal class LxPlaylistApi(
                 val total = data.count("total")
                 remotePage(rows(data, "info", source, total), page, total, source, { it.id }, ::parseKugouSong)
             }
-            LxSearchSource.QQ -> {
-                val root = get(source, "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg", mapOf(
-                    "disstid" to normalized, "type" to "1", "json" to "1", "utf8" to "1", "onlysong" to "0",
-                    "format" to "json", "g_tk" to "5381", "loginUin" to "0", "hostUin" to "0", "inCharset" to "utf8",
-                    "outCharset" to "utf-8", "notice" to "0", "platform" to "yqq", "needNewCode" to "0",
-                    "song_begin" to "${offset(page)}", "song_num" to "$PLAYLIST_LIMIT",
-                ))
-                val playlist = (root["cdlist"] as? JsonArray)?.firstOrNull() as? JsonObject ?: invalid(source)
-                if (playlist.string("disstid") != normalized) invalid(source)
-                val total = playlist.count("songnum")
-                remotePage(rows(playlist, "songlist", source, total), page, total, source, { it.id }, LxSearchClient::parseQqMusicInfo)
-            }
+            LxSearchSource.QQ -> qqSongs(normalized, page)
             LxSearchSource.QISHUI -> invalid(source)
         }
         store(key, result)
@@ -216,6 +224,48 @@ internal class LxPlaylistApi(
         return LxPage(songs, begin + pageIds.size < ids.size)
     }
 
+    private suspend fun qqSongs(id: String, page: Int): LxPage<LxMusicInfo> {
+        val source = LxSearchSource.QQ
+        val root = get(source, "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg", mapOf(
+            "disstid" to id, "type" to "1", "json" to "1", "utf8" to "1", "onlysong" to "0",
+            "format" to "json", "g_tk" to "5381", "loginUin" to "0", "hostUin" to "0", "inCharset" to "utf8",
+            "outCharset" to "utf-8", "notice" to "0", "platform" to "yqq", "needNewCode" to "0",
+            "song_begin" to "${offset(page)}", "song_num" to "$PLAYLIST_LIMIT",
+        ))
+        val playlist = (root["cdlist"] as? JsonArray)?.firstOrNull() as? JsonObject
+        if (playlist != null) {
+            if (playlist.string("disstid") != id) invalid(source)
+            val total = playlist.count("songnum")
+            return remotePage(rows(playlist, "songlist", source, total), page, total, source, { it.id }, LxSearchClient::parseQqMusicInfo)
+        }
+        // 部分歌单旧接口返回 privacy check 4000，回退官方 musicu 公开歌单接口。
+        val disstid = id.toLongOrNull() ?: invalid(source)
+        val payload = buildJsonObject {
+            put("req_0", buildJsonObject {
+                put("module", "music.srfDissInfo.aiDissInfo")
+                put("method", "uniform_get_Dissinfo")
+                put("param", buildJsonObject {
+                    put("disstid", disstid)
+                    put("userinfo", 1)
+                    put("tag", 1)
+                    put("orderlist", 1)
+                    put("song_begin", offset(page))
+                    put("song_num", PLAYLIST_LIMIT)
+                    put("onlysonglist", 0)
+                    put("enc_host_uin", "")
+                })
+            })
+        }.toString()
+        val response = postRequest("https://u.y.qq.com/cgi-bin/musicu.fcg", payload, "https://y.qq.com/")
+        val musicu = parseJsonObject(response, source)
+        if (musicu.string("code") != "0") invalid(source)
+        val req0 = musicu.obj("req_0") ?: invalid(source)
+        if (req0.string("code") != "0") invalid(source)
+        val data = req0.obj("data") ?: invalid(source)
+        val total = data.obj("dirinfo")?.count("songnum")
+        return remotePage(rows(data, "songlist", source, total), page, total, source, { it.id }, LxSearchClient::parseQqMusicInfo)
+    }
+
     private suspend fun get(source: LxSearchSource, url: String, parameters: Map<String, String>): JsonObject {
         val referer = when (source) {
             LxSearchSource.KUWO -> "https://www.kuwo.cn/"
@@ -224,7 +274,10 @@ internal class LxPlaylistApi(
             LxSearchSource.QQ -> "https://y.qq.com/"
             LxSearchSource.QISHUI -> invalid(source)
         }
-        val response = request(url, parameters, referer)
+        return parseJsonObject(request(url, parameters, referer), source)
+    }
+
+    private fun parseJsonObject(response: LxPlaylistHttpResponse, source: LxSearchSource): JsonObject {
         if (response.status !in 200..299 || response.body.isBlank()) invalid(source)
         val root = try {
             lxJson.parseToJsonElement(response.body) as? JsonObject ?: invalid(source)
@@ -275,19 +328,19 @@ internal class LxPlaylistApi(
     }
 }
 
-private fun offset(page: Int): Long = (page.toLong() - 1) * PLAYLIST_LIMIT
-private fun invalid(source: LxSearchSource): Nothing =
+internal fun offset(page: Int): Long = (page.toLong() - 1) * PLAYLIST_LIMIT
+internal fun invalid(source: LxSearchSource): Nothing =
     throw PlaylistResponseException("${source.displayName}歌单服务暂不可用或返回了无效数据")
 
-private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
-private fun JsonObject.string(vararg keys: String): String = keys.firstNotNullOfOrNull {
+internal fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
+internal fun JsonObject.string(vararg keys: String): String = keys.firstNotNullOfOrNull {
     (this[it] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
 }.orEmpty()
-private fun JsonObject.count(key: String): Long? = string(key).toLongOrNull()?.takeIf { it >= 0 }
-private fun rows(root: JsonObject, key: String, source: LxSearchSource, total: Long?): JsonArray =
+internal fun JsonObject.count(key: String): Long? = string(key).toLongOrNull()?.takeIf { it >= 0 }
+internal fun rows(root: JsonObject, key: String, source: LxSearchSource, total: Long?): JsonArray =
     root[key] as? JsonArray ?: if (root[key] == null && total == 0L) JsonArray(emptyList()) else invalid(source)
 
-private fun <T> remotePage(
+internal fun <T> remotePage(
     rows: JsonArray, page: Int, total: Long?, source: LxSearchSource, identity: (T) -> String, parse: (JsonObject) -> T?,
 ): LxPage<T> {
     val items = rows.take(PLAYLIST_LIMIT).mapNotNull { (it as? JsonObject)?.let(parse) }.distinctBy(identity)
@@ -298,7 +351,7 @@ private fun <T> remotePage(
     return LxPage(items, hasMore)
 }
 
-private fun parsePlaylist(item: JsonObject, source: LxSearchSource): LxPlaylistInfo? {
+internal fun parsePlaylist(item: JsonObject, source: LxSearchSource): LxPlaylistInfo? {
     val id = when (source) {
         LxSearchSource.KUWO -> item.string("playlistid")
         LxSearchSource.NETEASE -> item.string("id")
@@ -319,20 +372,29 @@ private fun parsePlaylist(item: JsonObject, source: LxSearchSource): LxPlaylistI
     )
 }
 
-private fun parseKugouSong(item: JsonObject): LxMusicInfo? {
+internal fun parseKugouSong(item: JsonObject): LxMusicInfo? {
     val filename = playlistText(item.string("filename"))
     val separator = filename.indexOf(" - ")
-    val title = item.string("songname", "audio_name").ifBlank { if (separator > 0) filename.substring(separator + 3).trim() else filename }
-    val singer = item.string("singername", "author_name").ifBlank { if (separator > 0) filename.substring(0, separator).trim() else "" }
+    val title = item.string("songname", "songname_original", "audio_name").ifBlank {
+        if (separator > 0) filename.substring(separator + 3).trim() else filename
+    }
+    val authors = (item["authors"] as? JsonArray).orEmpty()
+        .mapNotNull { (it as? JsonObject)?.string("author_name", "name")?.takeIf(String::isNotBlank) }
+        .joinToString(" / ")
+    val singer = item.string("singername", "author_name")
+        .ifBlank { authors }
+        .ifBlank { if (separator > 0) filename.substring(0, separator).trim() else "" }
     if (title.isBlank()) return null
+    val cover = item.string("image", "album_sizable_cover", "imgurl", "img")
+        .ifBlank { item.obj("trans_param")?.string("union_cover").orEmpty() }
     return LxSearchClient.parseKugouMusicInfo(JsonObject(item + mapOf(
         "songname" to JsonPrimitive(title), "singername" to JsonPrimitive(singer),
         "album_name" to JsonPrimitive(item.string("album_name", "albumname", "remark")),
-        "image" to JsonPrimitive(item.string("image", "album_sizable_cover", "imgurl", "img")),
+        "image" to JsonPrimitive(cover),
     )))
 }
 
-private fun playlistCover(value: String): String? {
+internal fun playlistCover(value: String): String? {
     val url = value.trim().replace("{size}", "480").replace(".kwcdn.kuwo.cn", ".kuwo.cn")
         .let { if (it.startsWith("//")) "https:$it" else it.replaceFirst("http://", "https://") }
     return url.takeIf { it.startsWith("https://") && runCatching { java.net.URI(it).host?.isNotBlank() == true }.getOrDefault(false) }
@@ -340,7 +402,7 @@ private fun playlistCover(value: String): String? {
 
 private val playlistTags = Regex("<[^>]*>")
 private val playlistEntities = Regex("&(?:amp|lt|gt|quot|apos|nbsp|#\\d+|#x[0-9a-fA-F]+);")
-private fun playlistText(value: String): String = playlistEntities.replace(value.replace(playlistTags, "")) { match ->
+internal fun playlistText(value: String): String = playlistEntities.replace(value.replace(playlistTags, "")) { match ->
     when (val entity = match.value) {
         "&amp;" -> "&"
         "&lt;" -> "<"

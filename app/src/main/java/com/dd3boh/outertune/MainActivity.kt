@@ -687,11 +687,12 @@ class MainActivity : ComponentActivity() {
                                         OnlineSearchResult(navController)
                                     }
                                     composable(
-                                        route = "online_playlist/{source}/{id}?title={title}",
+                                        route = "online_playlist/{source}/{id}?title={title}&kind={kind}",
                                         arguments = listOf(
                                             navArgument("source") { type = NavType.StringType },
                                             navArgument("id") { type = NavType.StringType },
                                             navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                                            navArgument("kind") { type = NavType.StringType; defaultValue = "playlist" },
                                         ),
                                     ) {
                                         com.dd3boh.outertune.ui.screens.search.OnlinePlaylistScreen(navController, scrollBehavior)

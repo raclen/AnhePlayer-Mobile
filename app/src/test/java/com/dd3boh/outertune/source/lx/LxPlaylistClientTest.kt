@@ -388,6 +388,49 @@ class LxPlaylistClientTest {
         assertEquals(22, calls)
     }
 
+    @Test
+    fun fallsBackToQqMusicuWhenLegacyPlaylistEndpointBlocksPrivacy() = runBlocking {
+        var postCalls = 0
+        val api = LxPlaylistApi(
+            postRequest = { url, body, referer ->
+                postCalls++
+                assertEquals("https://u.y.qq.com/cgi-bin/musicu.fcg", url)
+                assertEquals("https://y.qq.com/", referer)
+                assertTrue(body.contains("uniform_get_Dissinfo"))
+                ok("""{"code":0,"req_0":{"code":0,"data":{"dirinfo":{"songnum":30},"songlist":[{
+                    "mid":"qq-mid-2","title":"歌曲二","singer":[{"name":"歌手二"}],
+                    "album":{"id":88,"mid":"alb-2","name":"专辑二"},"interval":180
+                }]}}}""")
+            },
+            request = { _, _, _ ->
+                ok("""{"code":0,"subcode":4000,"msg":"check privacy error!"}""")
+            },
+        )
+        val page = api.songs("7707261125", LxSearchSource.QQ, 1).getOrThrow()
+        assertEquals(1, postCalls)
+        assertTrue(page.hasMore)
+        val song = page.items.single()
+        assertMediaRoute(song, "tx", "qq-mid-2", "tx_qq-mid-2")
+        assertEquals("歌曲二", song.name)
+        assertEquals("歌手二", song.singer)
+        assertEquals("专辑二", song.meta.albumName)
+        assertEquals("https://y.gtimg.cn/music/photo_new/T002R500x500M000alb-2.jpg", song.meta.picUrl)
+    }
+
+    @Test
+    fun parsesKugouAuthorsArrayWhenSingerNameIsMissing() = runBlocking {
+        val hash = "2E54C9C01C9DFC5C68F743368F353722"
+        val api = LxPlaylistApi { _, _, _ ->
+            ok("""{"status":1,"errcode":0,"data":{"total":1,"info":[{
+                "hash":"$hash","songname":"歌曲名","authors":[{"author_name":"作者甲"},{"author_name":"作者乙"}],
+                "duration":180,"album_id":"33","remark":"专辑名"
+            }]}}""")
+        }
+        val song = api.songs("123", LxSearchSource.KUGOU, 1).getOrThrow().items.single()
+        assertMediaRoute(song, "kg", hash, "kg_$hash")
+        assertEquals("作者甲 / 作者乙", song.singer)
+    }
+
     private fun assertMediaRoute(song: LxMusicInfo, source: String, sourceId: String, id: String) {
         val metadata = song.toMediaMetadata()
         assertEquals(id, song.id)

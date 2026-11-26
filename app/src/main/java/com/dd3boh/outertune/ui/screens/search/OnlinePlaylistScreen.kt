@@ -65,7 +65,7 @@ fun OnlinePlaylistScreen(
         LazyColumn(state = listState, contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()) {
             item(key = "header") {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text("${viewModel.sourceName}歌单", style = MaterialTheme.typography.titleMedium)
+                    Text(viewModel.sourceLabel, style = MaterialTheme.typography.titleMedium)
                     Text("已加载 ${state.songs.size} 首${if (state.hasMore) "，可继续加载" else ""}", style = MaterialTheme.typography.bodySmall)
                     Button(onClick = { play(0) }, enabled = state.songs.isNotEmpty(), modifier = Modifier.padding(top = 12.dp)) {
                         Text("播放已加载歌曲")
@@ -78,7 +78,9 @@ fun OnlinePlaylistScreen(
                     else play(state.songs.indexOfFirst { it.id == song.id })
                 }
             }
-            if (state.page > 0 && state.songs.isEmpty() && !state.loading) item(key = "empty") { Text("歌单暂无歌曲", Modifier.padding(16.dp)) }
+            if (state.page > 0 && state.songs.isEmpty() && !state.loading) {
+                item(key = "empty") { Text(if (viewModel.isToplist) "排行榜暂无歌曲" else "歌单暂无歌曲", Modifier.padding(16.dp)) }
+            }
             item(key = "footer") { SearchPageFooter(state.loading, state.hasMore, state.error, viewModel::loadMore) }
         }
         LazyColumnScrollbar(state = listState)

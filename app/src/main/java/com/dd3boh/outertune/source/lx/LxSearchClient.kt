@@ -147,17 +147,20 @@ object LxSearchClient {
     }
 
     internal fun parseQqMusicInfo(item: JsonObject): LxMusicInfo? {
-        val songMid = item.string("songmid").ifBlank { return null }
-        val albumMid = item.string("albummid")
+        val songMid = item.string("songmid", "mid").ifBlank { return null }
+        val albumObj = item.getObject("album")
+        val albumMid = item.string("albummid").ifBlank { albumObj?.string("mid").orEmpty() }
+        val albumName = item.string("albumname").ifBlank { albumObj?.string("name").orEmpty() }
+        val albumId = item.string("albumid").ifBlank { albumObj?.string("id").orEmpty() }.takeIf(String::isNotBlank)
         return LxMusicInfo(
-            id = "tx_$songMid", songmid = songMid, name = decode(item.string("songname")),
+            id = "tx_$songMid", songmid = songMid, name = decode(item.string("songname", "title", "name")),
             singer = item.getArray("singer").orEmpty()
                 .mapNotNull { (it as? JsonObject)?.string("name")?.takeIf(String::isNotBlank) }.joinToString(" / "),
             source = LxSearchSource.QQ.sourceId,
             interval = item.string("interval").toIntOrNull()?.toDuration(), mid = songMid,
             meta = LxMusicMeta(
-                songId = songMid, albumName = decode(item.string("albumname")),
-                albumId = item.string("albumid").takeIf(String::isNotBlank),
+                songId = songMid, albumName = decode(albumName),
+                albumId = albumId,
                 picUrl = albumMid.takeIf(String::isNotBlank)?.let { "https://y.gtimg.cn/music/photo_new/T002R500x500M000$it.jpg" },
                 qualitys = defaultQualities, _qualitys = defaultQualityMap,
             ),
