@@ -31,9 +31,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -52,7 +52,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -97,8 +100,16 @@ fun RadioScreen(
     viewModel: RadioViewModel = hiltViewModel(),
 ) {
     val stations by viewModel.stations.collectAsState()
+    val playbackStations by viewModel.playbackStations.collectAsState()
+    val favoriteStations by viewModel.favoriteStations.collectAsState()
+    val isLoadingFavorites by viewModel.isLoadingFavorites.collectAsState()
+    val favoritesError by viewModel.favoritesError.collectAsState()
     val currentIndex by viewModel.currentIndex.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
+    val loadError by viewModel.loadError.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val currentStation by RadioPlayerManager.currentStation.collectAsState()
     val playbackState by RadioPlayerManager.playbackState.collectAsState()
@@ -107,9 +118,11 @@ fun RadioScreen(
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     var showStationSheet by remember { mutableStateOf(false) }
+    var showFavorites by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val activeStation: RadioStation? = stations.getOrNull(currentIndex) ?: currentStation
+    // 搜索只改变候选列表，正在收听的电台仍是播放器卡片的唯一优先来源。
+    val activeStation: RadioStation? = currentStation ?: playbackStations.getOrNull(currentIndex)
     val playerConnection = LocalPlayerConnection.current
 
     LaunchedEffect(Unit) {
@@ -128,7 +141,7 @@ fun RadioScreen(
             station = activeStation,
             playbackState = playbackState,
             currentIndex = currentIndex,
-            totalCount = stations.size,
+            totalCount = playbackStations.size,
             isFavorite = activeStation?.let { favorites.contains(it.stationUuid) } ?: false,
             isLoading = isLoading,
             errorMessage = errorMessage,
@@ -140,8 +153,8 @@ fun RadioScreen(
                 navController.navigate("settings/radio")
             },
             onStepChange = { offset ->
-                val newIndex = (currentIndex + offset).coerceIn(0, (stations.size - 1).coerceAtLeast(0))
-                if (newIndex != currentIndex && newIndex in stations.indices) {
+                val newIndex = (currentIndex + offset).coerceIn(0, (playbackStations.size - 1).coerceAtLeast(0))
+                if (newIndex != currentIndex && newIndex in playbackStations.indices) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     if (offset > 0) {
                         viewModel.nextStation()
@@ -172,11 +185,14 @@ fun RadioScreen(
                     RadioPlayerManager.togglePlay()
                 }
             },
-            onShuffle = {
+            onOpenFavorites = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                viewModel.shuffleStation()
+                showFavorites = true
+                showStationSheet = true
+                viewModel.refreshFavoriteStations()
             },
             onOpenList = {
+                showFavorites = false
                 showStationSheet = true
             },
             onRetry = {
@@ -196,11 +212,37 @@ fun RadioScreen(
             ) {
                 RadioStationListSheet(
                     stations = stations,
-                    currentIndex = currentIndex,
+                    favoriteStations = favoriteStations,
+                    favorites = favorites,
+                    showFavorites = showFavorites,
+                    isLoadingFavorites = isLoadingFavorites,
+                    favoritesError = favoritesError,
+                    onShowFavoritesChange = { selected ->
+                        showFavorites = selected
+                        if (selected) viewModel.refreshFavoriteStations()
+                    },
+                    onRefreshFavorites = viewModel::refreshFavoriteStations,
+                    onToggleFavorite = viewModel::toggleFavorite,
                     currentStation = currentStation,
                     playbackState = playbackState,
-                    onSelect = { index ->
-                        viewModel.selectStation(index, autoPlay = true)
+                    searchQuery = searchQuery,
+                    isLoading = isLoading,
+                    isLoadingMore = isLoadingMore,
+                    hasMore = hasMore,
+                    loadError = loadError,
+                    onSearchQueryChange = viewModel::onSearchQueryChange,
+                    onLoadMore = viewModel::loadMoreStations,
+                    onRetry = {
+                        if (stations.isEmpty() && !hasMore) viewModel.refreshStations()
+                        else viewModel.loadMoreStations()
+                    },
+                    onOpenSettings = {
+                        showStationSheet = false
+                        navController.navigate("settings/radio")
+                    },
+                    onSelect = { station ->
+                        if (showFavorites) viewModel.selectFavoriteStation(station)
+                        else viewModel.selectStation(stations.indexOfFirst { it.stationUuid == station.stationUuid })
                         coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
                             showStationSheet = false
                         }
@@ -227,7 +269,7 @@ fun RadioContent(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onTogglePlay: () -> Unit,
-    onShuffle: () -> Unit,
+    onOpenFavorites: () -> Unit,
     onOpenList: () -> Unit,
     onRetry: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -253,12 +295,12 @@ fun RadioContent(
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 随机漫游，放在顶部避免挤占底部主控制栏
-                IconButton(onClick = onShuffle) {
+                // 收藏入口放在顶部，避免挤占底部主控制栏。
+                IconButton(onClick = onOpenFavorites) {
                     Icon(
-                        imageVector = Icons.Rounded.Shuffle,
-                        contentDescription = "随机一站",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = "查看收藏电台",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -658,9 +700,9 @@ private fun RadioControlsRow(
         // 收藏
         IconButton(onClick = onToggleFavorite) {
             Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 contentDescription = if (isFavorite) "取消收藏" else "收藏电台",
-                tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -730,23 +772,38 @@ private fun RadioControlsRow(
 @Composable
 private fun RadioStationListSheet(
     stations: List<RadioStation>,
-    currentIndex: Int,
+    favoriteStations: List<RadioStation>,
+    favorites: Set<String>,
+    showFavorites: Boolean,
+    isLoadingFavorites: Boolean,
+    favoritesError: String?,
+    onShowFavoritesChange: (Boolean) -> Unit,
+    onRefreshFavorites: () -> Unit,
+    onToggleFavorite: (RadioStation) -> Unit,
     currentStation: RadioStation?,
     playbackState: RadioPlaybackState,
-    onSelect: (Int) -> Unit,
+    searchQuery: String,
+    isLoading: Boolean,
+    isLoadingMore: Boolean,
+    hasMore: Boolean,
+    loadError: String?,
+    onSearchQueryChange: (String) -> Unit,
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onSelect: (RadioStation) -> Unit,
 ) {
-    var searchFilter by remember { mutableStateOf("") }
-    val filteredStations = remember(stations, searchFilter) {
-        if (searchFilter.isBlank()) {
-            stations
-        } else {
-            stations.filter {
-                it.name.contains(searchFilter, ignoreCase = true) ||
-                (it.country ?: "").contains(searchFilter, ignoreCase = true) ||
-                (it.language ?: "").contains(searchFilter, ignoreCase = true)
-            }
+    var favoriteQuery by remember { mutableStateOf("") }
+    val query = if (showFavorites) favoriteQuery else searchQuery
+    val visibleStations = if (showFavorites) {
+        remember(favoriteStations, favoriteQuery) {
+            val filter = favoriteQuery.trim()
+            if (filter.isEmpty()) favoriteStations
+            else favoriteStations.filter { it.displayTitle.contains(filter, ignoreCase = true) }
         }
-    }
+    } else stations
+    val listLoading = if (showFavorites) favoriteStations.isEmpty() && isLoadingFavorites else isLoading
+    val listError = if (showFavorites) favoritesError else loadError
 
     Column(
         modifier = Modifier
@@ -755,33 +812,104 @@ private fun RadioStationListSheet(
             .padding(horizontal = 16.dp)
     ) {
         Text(
-            text = "电台列表 (${stations.size})",
+            text = if (showFavorites) "收藏电台（${favoriteStations.size} 个）"
+            else "${if (searchQuery.isBlank()) "电台列表" else "搜索结果"}（已加载 ${stations.size} 个）",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
+        TabRow(selectedTabIndex = if (showFavorites) 1 else 0) {
+            Tab(
+                selected = !showFavorites,
+                onClick = { onShowFavoritesChange(false) },
+                text = { Text("全部") },
+            )
+            Tab(
+                selected = showFavorites,
+                onClick = { if (!showFavorites) onShowFavoritesChange(true) },
+                text = { Text("收藏（${favoriteStations.size}）") },
+            )
+        }
+
         OutlinedTextField(
-            value = searchFilter,
-            onValueChange = { searchFilter = it },
-            placeholder = { Text("搜索当前电台、国家或语言…") },
+            value = query,
+            onValueChange = { if (showFavorites) favoriteQuery = it else onSearchQueryChange(it) },
+            placeholder = { Text(if (showFavorites) "搜索收藏电台…" else "联网搜索电台名称…") },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { if (showFavorites) favoriteQuery = "" else onSearchQueryChange("") }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "清空搜索")
+                    }
+                }
+            },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
+            modifier = Modifier.fillMaxWidth()
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
         ) {
+            if (showFavorites && isLoadingFavorites) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = if (showFavorites) "收藏不受地区、语言和码率筛选限制"
+                else "联网搜索 · 按电台设置筛选",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (showFavorites) {
+                TextButton(onClick = onRefreshFavorites, enabled = !isLoadingFavorites) { Text("刷新") }
+            } else {
+                TextButton(onClick = onOpenSettings) { Text("筛选设置") }
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) {
+            if (listLoading) {
+                item(key = "loading") {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            if (showFavorites) "正在载入收藏…" else "正在搜索电台…",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            } else if (visibleStations.isEmpty() && listError == null) {
+                item(key = "empty") {
+                    Text(
+                        text = when {
+                            showFavorites && favoriteStations.isEmpty() -> "还没有收藏电台，点电台右侧的星星即可收藏"
+                            showFavorites -> "未找到匹配的收藏电台，可更换名称或清空搜索"
+                            hasMore -> "当前批次暂无可用电台，可继续加载更多"
+                            else -> "未找到匹配电台，可更换名称或在筛选设置中选择全部地区、全部语言"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    )
+                }
+            }
             itemsIndexed(
-                items = filteredStations,
+                items = visibleStations,
                 key = { _, item -> item.stationUuid }
             ) { _, station ->
                 val isSelected = station.stationUuid == currentStation?.stationUuid
-                val originalIndex = stations.indexOfFirst { it.stationUuid == station.stationUuid }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -792,11 +920,7 @@ private fun RadioStationListSheet(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                             else Color.Transparent
                         )
-                        .clickable {
-                            if (originalIndex >= 0) {
-                                onSelect(originalIndex)
-                            }
-                        }
+                        .clickable(enabled = station.playUrl.isNotBlank()) { onSelect(station) }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Box(
@@ -834,7 +958,8 @@ private fun RadioStationListSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = listOfNotNull(
+                            text = if (station.playUrl.isBlank()) "信息暂不可用，请联网刷新收藏"
+                            else listOfNotNull(
                                 station.displaySubtitle,
                                 station.displayCodecAndBitrate
                             ).joinToString(" · "),
@@ -852,6 +977,52 @@ private fun RadioStationListSheet(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+                    val isFavorite = station.stationUuid in favorites
+                    IconButton(onClick = { onToggleFavorite(station) }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = if (isFavorite) "取消收藏 ${station.displayTitle}"
+                            else "收藏 ${station.displayTitle}",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            if (!listLoading && (!showFavorites || listError != null)) {
+                item(key = "pagination") {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    ) {
+                        when {
+                            listError != null -> {
+                                Text(
+                                    text = listError,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center,
+                                )
+                                TextButton(
+                                    onClick = if (showFavorites) onRefreshFavorites else onRetry,
+                                    enabled = !showFavorites || !isLoadingFavorites,
+                                ) { Text("重试") }
+                            }
+                            !showFavorites && isLoadingMore -> CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            !showFavorites && hasMore -> TextButton(
+                                onClick = onLoadMore,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("加载更多电台") }
+                            stations.isNotEmpty() -> Text(
+                                text = "已加载全部匹配电台",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -889,7 +1060,7 @@ private fun RadioContentPreview() {
                 onPrevious = {},
                 onNext = {},
                 onTogglePlay = {},
-                onShuffle = {},
+                onOpenFavorites = {},
                 onOpenList = {},
             )
         }

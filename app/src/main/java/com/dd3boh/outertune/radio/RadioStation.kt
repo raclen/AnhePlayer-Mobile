@@ -57,3 +57,9 @@ data class RadioStation(
     val tagList: List<String>
         get() = tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 }
+
+data class RadioStationPage(
+    val stations: List<RadioStation>,
+    val nextOffset: Int,
+    val hasMore: Boolean,
+)

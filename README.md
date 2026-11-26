@@ -6,7 +6,7 @@ AnhePlayer 是基于 OuterTune/InnerTune 二次开发的 Android 音乐播放器
 
 ## 下载与系统要求
 
-当前代码版本：**v2.0.40**（versionCode **240**）。版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
+当前代码版本：**v2.0.41**（versionCode **241**）。版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 - [下载最新正式版](https://github.com/raclen/AnhePlayer-Mobile/releases/latest)
 - [全部版本](https://github.com/raclen/AnhePlayer-Mobile/releases)
@@ -73,8 +73,11 @@ AnhePlayer 是基于 OuterTune/InnerTune 二次开发的 Android 音乐播放器
   - 「今日关闭」仅关闭当天的播放失败弹框，重启后当天仍有效，次日自动恢复；不改变重试或自动跳过行为
 - 在线电台
   - 基于 Radio Browser 发现电台，默认中国地区与中文广播
-  - 支持随波漫游（Roam）、后台收听与电台收藏
-  - 在 **设置 → 电台设置** 调整码率、国家/地区和广播语言过滤
+  - 电台名称联网搜索，每批 80 个并支持「加载更多」，不再只搜索当前列表
+  - 顶部星星打开收藏，列表支持「全部／收藏」切换；可点击电台右侧星星直接收藏或取消
+  - 收藏不受地区、语言、码率及首批数量限制，保存电台信息缓存并兼容旧版收藏
+  - 支持上一台／下一台与后台收听；从收藏中选台后沿收藏队列切换
+  - 在 **设置 → 电台设置** 调整普通电台搜索的码率、国家/地区和广播语言过滤
 - 应用内更新
   - 从 **关于** 页检查本仓库正式 Release；自动检查限频，同版本自动提醒不重复弹出
   - 按设备架构下载对应 APK，使用系统 DownloadManager 执行后台下载
