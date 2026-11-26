@@ -15,9 +15,11 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,9 +53,10 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -769,6 +772,7 @@ private fun RadioControlsRow(
 /**
  * 底部电台列表抽屉
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RadioStationListSheet(
     stations: List<RadioStation>,
@@ -808,29 +812,60 @@ private fun RadioStationListSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(480.dp)
-            .padding(horizontal = 16.dp)
+            // 跟随弹层可用高度伸缩，避免固定高度在小屏或键盘弹出时挤压列表。
+            .fillMaxHeight(0.82f)
+            .padding(horizontal = 20.dp)
     ) {
-        Text(
-            text = if (showFavorites) "收藏电台（${favoriteStations.size} 个）"
-            else "${if (searchQuery.isBlank()) "电台列表" else "搜索结果"}（已加载 ${stations.size} 个）",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-
-        TabRow(selectedTabIndex = if (showFavorites) 1 else 0) {
-            Tab(
-                selected = !showFavorites,
-                onClick = { onShowFavoritesChange(false) },
-                text = { Text("全部") },
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp),
+        ) {
+            Text(
+                text = if (showFavorites) "收藏电台" else if (searchQuery.isBlank()) "电台列表" else "搜索结果",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
-            Tab(
-                selected = showFavorites,
-                onClick = { if (!showFavorites) onShowFavoritesChange(true) },
-                text = { Text("收藏（${favoriteStations.size}）") },
+            Text(
+                text = if (showFavorites) "${favoriteStations.size} 个"
+                else "已加载 ${stations.size} 个",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 12.dp),
             )
         }
+
+        val modeColors = SegmentedButtonDefaults.colors(
+            activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            activeBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        )
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+        ) {
+            SegmentedButton(
+                selected = !showFavorites,
+                onClick = { onShowFavoritesChange(false) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                colors = modeColors,
+                icon = {},
+            ) { Text("全部") }
+            SegmentedButton(
+                selected = showFavorites,
+                onClick = { if (!showFavorites) onShowFavoritesChange(true) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                colors = modeColors,
+                icon = {},
+            ) { Text("收藏（${favoriteStations.size}）") }
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = query,
@@ -845,22 +880,21 @@ private fun RadioStationListSheet(
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
         ) {
             if (showFavorites && isLoadingFavorites) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
             Text(
-                text = if (showFavorites) "收藏不受地区、语言和码率筛选限制"
-                else "联网搜索 · 按电台设置筛选",
-                style = MaterialTheme.typography.labelSmall,
+                text = if (showFavorites) "收藏不受筛选限制" else "按当前筛选联网搜索",
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
@@ -872,7 +906,9 @@ private fun RadioStationListSheet(
         }
 
         LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth()
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (listLoading) {
                 item(key = "loading") {
