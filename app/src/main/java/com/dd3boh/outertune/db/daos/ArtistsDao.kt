@@ -82,6 +82,7 @@ interface ArtistsDao {
         SELECT song.*
         FROM song_artist_map JOIN song ON song_artist_map.songId = song.id
         WHERE song_artist_map.artistId IN (SELECT id FROM artist WHERE name LIKE '%' || :query || '%') AND song.isLocal = 1
+            AND song.inLibrary IS NOT NULL AND song.localPath IS NOT NULL
         LIMIT :previewSize
     """)
     fun searchLocalArtistSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>

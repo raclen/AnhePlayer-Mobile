@@ -30,8 +30,8 @@ android {
         applicationId = "com.dd3boh.outertune"
         minSdk = 24
         targetSdk = 36
-        versionCode = 243
-        versionName = "2.0.43"
+        versionCode = 244
+        versionName = "2.0.44"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

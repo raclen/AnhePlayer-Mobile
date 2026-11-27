@@ -264,7 +264,7 @@ class FFmpegScanner() : MetadataScanner {
                     codecs = codec?.trim() ?: "—",
                     bitrate = bitrate.toInt(),
                     sampleRate = sampleRate,
-                    contentLength = duration,
+                    contentLength = fd.statSize,
                     extraComment = if (!extraData.isBlank()) extraData else null
                 )
             )

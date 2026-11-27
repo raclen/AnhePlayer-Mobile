@@ -226,7 +226,7 @@ class TagLibScanner : MetadataScanner {
                     codecs = codec,
                     bitrate = bitrate,
                     sampleRate = sampleRate,
-                    contentLength = duration,
+                    contentLength = fd.statSize,
                     extraComment = if (!extraData.isBlank()) extraData else null,
                 )
             )

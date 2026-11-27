@@ -38,13 +38,13 @@ interface SongsDao {
     fun searchSongsInDb(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
     @Transaction
-    @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' AND isLocal = 1 LIMIT :previewSize")
+    @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' AND isLocal = 1 AND inLibrary IS NOT NULL AND localPath IS NOT NULL LIMIT :previewSize")
     fun searchSongsAllLocal(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
     @Transaction
     @Query("""
         SELECT * FROM song
-        WHERE isLocal = 1 AND (
+        WHERE isLocal = 1 AND inLibrary IS NOT NULL AND localPath IS NOT NULL AND (
             albumName LIKE '%' || :query || '%'
             OR id IN (
                 SELECT songId FROM song_album_map
@@ -189,9 +189,10 @@ interface SongsDao {
 
     @Query("""
         SELECT * FROM song
-        WHERE localPath IN (
+        WHERE isLocal = 1 AND localPath IN (
             SELECT localPath
             FROM song
+            WHERE isLocal = 1 AND localPath IS NOT NULL
             GROUP BY localPath
             HAVING COUNT(*) > 1
         )
@@ -381,7 +382,7 @@ interface SongsDao {
     @Query("UPDATE song SET liked = 0, likedDate = null WHERE id = :songId")
     fun removeLike(songId: String)
 
-    @Query("UPDATE song SET inLibrary = null WHERE localPath = null")
+    @Query("UPDATE song SET inLibrary = NULL WHERE isLocal = 1 AND localPath IS NULL AND inLibrary IS NOT NULL")
     fun disableInvalidLocalSongs()
 
     @Query("UPDATE song SET inLibrary = null, localPath = null WHERE id = :songId")

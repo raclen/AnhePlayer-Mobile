@@ -22,13 +22,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.IOException
 
 /**
  * 一个「含音乐的文件夹」
@@ -72,6 +73,7 @@ object MusicFolderDiscovery {
     val scanFailed = MutableStateFlow(false)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scanMutex = Mutex()
     private var scanJob: Job? = null
 
     /**
@@ -79,14 +81,12 @@ object MusicFolderDiscovery {
      *
      * 扫描不绑定界面生命周期，对话框关掉也会继续扫完并缓存结果。
      */
-    fun scanAsync(context: Context, scanPaths: List<Uri>) {
+    fun scanAsync(context: Context, scanPaths: List<Uri>, syncLibrary: suspend (Context) -> Unit) {
         val appContext = context.applicationContext
-        val previous = scanJob
+        scanJob?.cancel()
         scanJob = scope.launch {
-            // 等上一次真正退出，避免 isScanning 互斥导致本次直接返回
-            previous?.cancelAndJoin()
             try {
-                scan(appContext, scanPaths)
+                scanMutex.withLock { scan(appContext, scanPaths, syncLibrary) }
             } catch (e: CancellationException) {
                 // 被新的扫描取代
             } catch (e: Exception) {
@@ -101,9 +101,7 @@ object MusicFolderDiscovery {
      * 注意：这里刻意**忽略**当前的隐藏列表，把含音乐的文件夹全部列出来，
      * 用户才能看到自己隐藏了什么，并反向取消隐藏。
      */
-    suspend fun scan(context: Context, scanPaths: List<Uri>) = withContext(Dispatchers.IO) {
-        if (isScanning.value) return@withContext
-
+    private suspend fun scan(context: Context, scanPaths: List<Uri>, syncLibrary: suspend (Context) -> Unit) {
         Log.i(TAG, "------------ DISCOVERY: 开始扫描含音乐的文件夹 ------------")
         isScanning.value = true
         scanFailed.value = false
@@ -156,10 +154,13 @@ object MusicFolderDiscovery {
                         if (foundSongs % 50 == 0) scannedSongCount.value = foundSongs
                     },
                 )
-                scannedDirCount.value = visitedDirs
-                scannedSongCount.value = foundSongs
             }
 
+            scannedDirCount.value = visitedDirs
+            scannedSongCount.value = foundSongs
+            currentCoroutineContext().ensureActive()
+            // 重新扫描的完成状态同时代表目录统计和曲库对账均已结束。
+            syncLibrary(context)
             folders.value = found
                 .distinctBy { it.uri.toString() }
                 .sortedBy { it.path.lowercase() }
@@ -184,14 +185,13 @@ object MusicFolderDiscovery {
     /** 清空缓存，下次打开对话框时重新扫描 */
     fun invalidate() {
         cancel()
+        folders.value = emptyList()
         hasScanned.value = false
     }
 
     /** 取消当前扫描（保留已得到的列表不覆盖） */
     fun cancel() {
         scanJob?.cancel()
-        scanJob = null
-        folders.value = emptyList()
         scanFailed.value = false
         scannedDirCount.value = 0
         scannedSongCount.value = 0
@@ -282,7 +282,7 @@ object MusicFolderDiscovery {
     /**
      * 设备全盘音乐目录扫描（未配置 SAF 扫描路径时）：直接用 MediaStore 统计包含音乐文件的目录
      */
-    private fun scanBuiltinMediaDirs(
+    private suspend fun scanBuiltinMediaDirs(
         context: Context,
         sink: MutableList<MusicFolderInfo>,
         onDirVisited: () -> Unit,
@@ -297,22 +297,23 @@ object MusicFolderDiscovery {
 
         val directCounts = HashMap<String, Int>()
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        runCatching {
-            context.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Audio.Media.DATA),
-                selection,
-                null,
-                null,
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val path = cursor.getString(0) ?: continue
-                    val parent = File(path).parent ?: continue
-                    directCounts[parent] = (directCounts[parent] ?: 0) + 1
-                    onSongFound()
-                }
+        val cursor = context.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Audio.Media.DATA),
+            selection,
+            null,
+            null,
+        ) ?: throw IOException("无法读取系统音乐索引")
+        cursor.use {
+            while (cursor.moveToNext()) {
+                currentCoroutineContext().ensureActive()
+                val file = cursor.getString(0)?.let(::File) ?: continue
+                if (file.scanSizeBytes() == null) continue
+                val parent = file.parent ?: continue
+                directCounts[parent] = (directCounts[parent] ?: 0) + 1
+                onSongFound()
             }
-        }.onFailure { Log.w(TAG, "扫描设备音乐文件夹失败: ${it.message}") }
+        }
 
         // 把直接计数向上累加，得到每个文件夹「含子文件夹」的总数
         val totals = HashMap<String, Int>()

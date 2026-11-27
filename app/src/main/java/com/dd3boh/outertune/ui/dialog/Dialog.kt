@@ -57,6 +57,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -83,8 +84,11 @@ import com.dd3boh.outertune.constants.SNACKBAR_VERY_SHORT
 import com.dd3boh.outertune.db.entities.FormatEntity
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.ui.component.button.IconButton
+import com.dd3boh.outertune.utils.scanners.readableSizeBytes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
@@ -558,19 +562,14 @@ fun DetailsDialog(
                     details.add(stringResource(R.string.loudness) to currentFormat?.loudnessDb?.let { "$it dB" })
                 }
 
-                details.addAll(
-                    mutableListOf(
-                        stringResource(R.string.file_size) to currentFormat?.contentLength?.let {
-                            if (mediaMetadata.isLocal && mediaMetadata.localPath != null && File(mediaMetadata.localPath).exists()) {
-                                Formatter.formatShortFileSize(
-                                    context,
-                                    File(mediaMetadata.localPath).length() * (1024 / 1000)
-                                )
-                            } else {
-                                Formatter.formatShortFileSize(context, it)
-                            }
-                        }
-                    ))
+                val sizeBytes = if (mediaMetadata.isLocal) {
+                    produceState<Long?>(null, mediaMetadata.localPath) {
+                        value = withContext(Dispatchers.IO) { mediaMetadata.localPath?.let { File(it).readableSizeBytes() } }
+                    }.value
+                } else {
+                    currentFormat?.contentLength
+                }
+                details.add(stringResource(R.string.file_size) to sizeBytes?.let { Formatter.formatShortFileSize(context, it) })
 
                 if (mediaMetadata.isLocal) {
                     details.add(stringResource(R.string.file_path) to mediaMetadata.localPath)

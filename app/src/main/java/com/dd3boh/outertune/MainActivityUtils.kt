@@ -185,8 +185,8 @@ internal suspend fun scanInit(
                 )
             } else {
                 // equivalent to (quick scan)
-                val uris = scanner.scanLocal(scanPaths, excludedScanPaths)
-                scanner.quickSync(database, uris, scannerSensitivity, strictExtensions, strictFilePaths)
+                val files = scanner.scanLocal(scanPaths, excludedScanPaths)
+                scanner.quickSync(database, files, scannerSensitivity, strictExtensions, strictFilePaths)
             }
             currentCoroutineContext().ensureActive()
             ScanInitResult(ScanStatus.COMPLETED, localScanAttempted = true)

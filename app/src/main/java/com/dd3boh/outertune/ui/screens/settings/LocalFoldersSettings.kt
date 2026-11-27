@@ -10,7 +10,6 @@ package com.dd3boh.outertune.ui.screens.settings
 
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +46,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +61,7 @@ import com.dd3boh.outertune.MainActivity
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.withLocalMediaScanner
 import com.dd3boh.outertune.constants.ExcludedScanPathsKey
+import com.dd3boh.outertune.constants.ScanPathsKey
 import com.dd3boh.outertune.constants.ScannerImpl
 import com.dd3boh.outertune.constants.ScannerMatchCriteria
 import com.dd3boh.outertune.constants.TopBarInsets
@@ -76,9 +75,6 @@ import com.dd3boh.outertune.utils.scanners.MusicFolderDiscovery
 import com.dd3boh.outertune.utils.scanners.MusicFolderInfo
 import com.dd3boh.outertune.utils.scanners.stringFromUriList
 import com.dd3boh.outertune.utils.scanners.uriListFromString
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /**
  * 本地媒体 - 音乐文件夹
@@ -94,7 +90,7 @@ fun LocalFoldersSettings(
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
-    val coroutineScope = rememberCoroutineScope()
+    val scanPaths by rememberPreference(ScanPathsKey, defaultValue = "")
     val (hiddenFolders, onHiddenFoldersChange) = rememberPreference(ExcludedScanPathsKey, defaultValue = "")
 
     val folders by MusicFolderDiscovery.folders.collectAsState()
@@ -107,35 +103,25 @@ fun LocalFoldersSettings(
         uriListFromString(hiddenFolders).map { it.toString() }.toSet()
     }
 
-    fun syncLibrary(excludedStr: String) {
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                withLocalMediaScanner(context, ScannerImpl.MEDIASTORE) { scanner ->
-                    scanner.fullMediaStoreSync(
-                        database = database,
-                        scanPaths = emptyList(),
-                        excludedScanPaths = uriListFromString(excludedStr),
-                        matchCriteria = ScannerMatchCriteria.LEVEL_2,
-                        strictFileNames = false,
-                        strictFilePaths = false,
-                        refreshExisting = false,
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w("LocalFoldersSettings", "Library sync failed: ${e.message}")
-            }
-        }
-    }
-
-    fun startScan() {
+    fun startScan(excludedStr: String = hiddenFolders) {
         if (context.checkSelfPermission(MEDIA_PERMISSION_LEVEL) != PackageManager.PERMISSION_GRANTED) {
             (context as? MainActivity)?.permissionLauncher?.launch(MEDIA_PERMISSION_LEVEL)
             return
         }
-        MusicFolderDiscovery.scanAsync(context, emptyList())
-        syncLibrary(hiddenFolders)
+        val included = uriListFromString(scanPaths)
+        MusicFolderDiscovery.scanAsync(context, included) { appContext ->
+            withLocalMediaScanner(appContext, ScannerImpl.MEDIASTORE) { scanner ->
+                scanner.fullMediaStoreSync(
+                    database = database,
+                    scanPaths = included,
+                    excludedScanPaths = uriListFromString(excludedStr),
+                    matchCriteria = ScannerMatchCriteria.LEVEL_2,
+                    strictFileNames = false,
+                    strictFilePaths = false,
+                    refreshExisting = false,
+                )
+            }
+        }
     }
 
     fun setHidden(folderUri: Uri, hide: Boolean) {
@@ -148,12 +134,12 @@ fun LocalFoldersSettings(
         }
         val newHiddenStr = stringFromUriList(current)
         onHiddenFoldersChange(newHiddenStr)
-        syncLibrary(newHiddenStr)
+        startScan(newHiddenStr)
     }
 
     // 进入页面就自动扫一次（已有结果则直接展示缓存）
     LaunchedEffect(Unit) {
-        if (!MusicFolderDiscovery.isScanning.value && MusicFolderDiscovery.folders.value.isEmpty()) {
+        if (!MusicFolderDiscovery.isScanning.value && !MusicFolderDiscovery.hasScanned.value) {
             startScan()
         }
     }

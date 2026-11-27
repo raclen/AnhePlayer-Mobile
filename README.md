@@ -6,7 +6,7 @@ AnhePlayer 是基于 OuterTune/InnerTune 二次开发的 Android 音乐播放器
 
 ## 下载与系统要求
 
-当前代码版本：**v2.0.43**（versionCode **243**）。版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
+当前代码版本：**v2.0.44**（versionCode **244**）。版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 - [下载最新正式版](https://github.com/raclen/AnhePlayer-Mobile/releases/latest)
 - [全部版本](https://github.com/raclen/AnhePlayer-Mobile/releases)

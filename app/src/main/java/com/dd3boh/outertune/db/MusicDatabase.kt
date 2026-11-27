@@ -11,6 +11,7 @@ import androidx.room.RenameColumn
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.withTransaction
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -66,6 +67,10 @@ class MusicDatabase(
     }
 
     fun close() = delegate.close()
+
+    /** 扫描需要等本批写入提交后，才能按磁盘快照核对曲库。 */
+    suspend fun withTransaction(block: MusicDatabase.() -> Unit) =
+        delegate.withTransaction { block(this@MusicDatabase) }
 
     companion object {
         const val MUSIC_DATABASE_VERSION = 21
